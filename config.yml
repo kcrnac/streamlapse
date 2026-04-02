@@ -1,0 +1,23 @@
+stream:
+  # URL is read from the STREAM_URL environment variable (GitHub Secret).
+  # url: set via STREAM_URL secret
+
+schedule:
+  timezone: 'Europe/Zagreb'
+  work_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+  work_hours:
+    start: '07:00'
+    end: '17:00'
+
+capture:
+  interval_minutes: 5 # how often to capture (5, 10, 15, 30, or 60)
+  jpeg_quality: 3 # ffmpeg -q:v: 1 (best) – 31 (worst), 2-4 is good
+  ffmpeg_timeout: 30 # seconds to wait for stream before giving up
+
+storage:
+  r2_prefix: 'screenshots'
+  videos_prefix: 'videos'
+
+generate:
+  default_fps: 24
+  video_scale: '1920:-2' # width:-2 keeps aspect ratio, must be divisible by 2

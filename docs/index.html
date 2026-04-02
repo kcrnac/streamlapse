@@ -1,0 +1,1230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>streamlapse — HLS stream timelapse, for free</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --surface2: #21262d;
+        --border: #30363d;
+        --text: #e6edf3;
+        --muted: #7d8590;
+        --subtle: #b1bac4;
+        --accent: #3fb950;
+        --blue: #58a6ff;
+        --orange: #f0883e;
+        --mono: 'SF Mono', 'Fira Code', Consolas, 'Liberation Mono', monospace;
+        --sans:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial,
+          sans-serif;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.7;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* HEADER */
+      .site-header {
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 200;
+        background: rgba(13, 17, 23, 0.95);
+        backdrop-filter: blur(12px);
+      }
+      .site-header__inner {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 2rem;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+      }
+      .site-logo {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        letter-spacing: -0.02em;
+      }
+      .site-logo .dot {
+        color: var(--accent);
+      }
+      .site-header__nav {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+      .site-header__nav a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.875rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        transition:
+          color 0.15s,
+          background 0.15s;
+      }
+      .site-header__nav a:hover {
+        color: var(--text);
+        background: var(--surface2);
+      }
+      .gh-btn {
+        margin-left: 0.5rem;
+        background: var(--surface2);
+        color: var(--text) !important;
+        border: 1px solid var(--border);
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      .gh-btn:hover {
+        background: var(--surface) !important;
+        border-color: var(--subtle) !important;
+      }
+
+      /* HERO */
+      .hero {
+        border-bottom: 1px solid var(--border);
+        padding: 4rem 2rem 3.5rem;
+      }
+      .hero__inner {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        gap: 3rem;
+        align-items: center;
+      }
+      .hero__eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 1rem;
+      }
+      .hero__eyebrow::before {
+        content: '';
+        display: block;
+        width: 6px;
+        height: 6px;
+        background: var(--accent);
+        border-radius: 50%;
+      }
+      .hero h1 {
+        font-size: clamp(2rem, 4vw, 2.9rem);
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -0.04em;
+        margin-bottom: 1.25rem;
+      }
+      .hero__desc {
+        font-size: 1.05rem;
+        color: var(--subtle);
+        margin-bottom: 2rem;
+        max-width: 540px;
+      }
+      .hero__actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 1.25rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid transparent;
+        transition:
+          opacity 0.15s,
+          transform 0.1s;
+        white-space: nowrap;
+      }
+      .btn:hover {
+        opacity: 0.85;
+        transform: translateY(-1px);
+      }
+      .btn-green {
+        background: var(--accent);
+        color: #0d1117;
+        border-color: var(--accent);
+      }
+      .btn-outline {
+        background: transparent;
+        color: var(--text);
+        border-color: var(--border);
+      }
+      .btn-outline:hover {
+        border-color: var(--subtle);
+        background: var(--surface2);
+        opacity: 1;
+        transform: none;
+      }
+
+      .pipeline-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+      }
+      .pipeline-card .card-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 0.9rem;
+      }
+      .pipe-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.65rem 0;
+        border-top: 1px solid var(--border);
+      }
+      .pipe-step:first-of-type {
+        border-top: none;
+      }
+      .pipe-step .p-icon {
+        font-size: 0.95rem;
+        flex-shrink: 0;
+        width: 1.4rem;
+        text-align: center;
+        padding-top: 0.1rem;
+      }
+      .pipe-step .p-text {
+        font-size: 0.82rem;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .pipe-step .p-text strong {
+        color: var(--text);
+        font-weight: 600;
+        display: block;
+      }
+
+      /* PAGE LAYOUT */
+      .page-body {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 3.5rem 2rem 6rem;
+        display: grid;
+        grid-template-columns: 210px 1fr;
+        gap: 4rem;
+        align-items: start;
+      }
+
+      /* TOC */
+      .toc {
+        position: sticky;
+        top: 80px;
+      }
+      .toc__label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 0.65rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .toc ul {
+        list-style: none;
+      }
+      .toc ul ul {
+        padding-left: 0.75rem;
+        margin-top: 0.1rem;
+      }
+      .toc a {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--muted);
+        text-decoration: none;
+        padding: 0.28rem 0.6rem;
+        border-radius: 6px;
+        border-left: 2px solid transparent;
+        transition:
+          color 0.15s,
+          background 0.15s,
+          border-color 0.15s;
+        line-height: 1.4;
+      }
+      .toc a:hover {
+        color: var(--text);
+        background: var(--surface2);
+        border-left-color: var(--border);
+      }
+      .toc a.active {
+        color: var(--blue);
+        border-left-color: var(--blue);
+        background: rgba(88, 166, 255, 0.07);
+      }
+      .toc ul ul a {
+        font-size: 0.76rem;
+      }
+
+      /* ARTICLE */
+      article {
+        min-width: 0;
+      }
+      .section {
+        padding-bottom: 3rem;
+        margin-bottom: 3rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .section:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+        margin-bottom: 0;
+      }
+
+      h2 {
+        font-size: 1.45rem;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        margin-bottom: 1rem;
+        line-height: 1.25;
+      }
+      h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text);
+        margin: 1.75rem 0 0.6rem;
+      }
+
+      p {
+        color: var(--subtle);
+        margin-bottom: 0.85rem;
+      }
+      p:last-child {
+        margin-bottom: 0;
+      }
+      strong {
+        color: var(--text);
+      }
+      a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+
+      /* feature cards */
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .feature-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1.25rem;
+        transition: border-color 0.15s;
+      }
+      .feature-card:hover {
+        border-color: var(--subtle);
+      }
+      .feature-card .fc-icon {
+        font-size: 1.2rem;
+        margin-bottom: 0.55rem;
+      }
+      .feature-card h4 {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 0.3rem;
+      }
+      .feature-card p {
+        font-size: 0.81rem;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* numbered steps */
+      .steps {
+        list-style: none;
+        counter-reset: sc;
+        margin: 1rem 0 1.5rem;
+      }
+      .steps li {
+        counter-increment: sc;
+        display: flex;
+        gap: 1rem;
+        padding: 0.85rem 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .steps li:last-child {
+        border-bottom: none;
+      }
+      .steps li::before {
+        content: counter(sc);
+        flex-shrink: 0;
+        width: 1.65rem;
+        height: 1.65rem;
+        border-radius: 50%;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 0.15rem;
+      }
+      .steps .st {
+        color: var(--subtle);
+        font-size: 0.9rem;
+        line-height: 1.6;
+      }
+      .steps .st strong {
+        color: var(--text);
+      }
+
+      /* tables */
+      .table-wrap {
+        overflow-x: auto;
+        margin: 1.25rem 0;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      thead {
+        background: var(--surface2);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        text-align: left;
+        padding: 0.55rem 1rem;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      td {
+        padding: 0.6rem 1rem;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        vertical-align: top;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      tbody tr:hover td {
+        background: var(--surface2);
+      }
+
+      /* code */
+      code {
+        font-family: var(--mono);
+        font-size: 0.82em;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0.1em 0.4em;
+        color: var(--orange);
+      }
+      .code-block {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin: 1.25rem 0;
+        overflow: hidden;
+      }
+      .code-block__header {
+        background: var(--surface2);
+        border-bottom: 1px solid var(--border);
+        padding: 0.45rem 1.25rem;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .code-block pre {
+        background: none;
+        border: none;
+        border-radius: 0;
+        margin: 0;
+        padding: 1.25rem 1.5rem;
+        overflow-x: auto;
+      }
+      .code-block pre code {
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: 0.82rem;
+        color: var(--text);
+        line-height: 1.65;
+      }
+
+      /* callout */
+      .callout {
+        display: flex;
+        gap: 0.75rem;
+        background: rgba(88, 166, 255, 0.05);
+        border: 1px solid rgba(88, 166, 255, 0.2);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin: 1.25rem 0;
+        font-size: 0.875rem;
+        color: var(--subtle);
+        line-height: 1.6;
+      }
+      .callout .ci {
+        flex-shrink: 0;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      /* footer */
+      .site-footer {
+        border-top: 1px solid var(--border);
+        padding: 2rem;
+      }
+      .site-footer__inner {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+      .site-footer p {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin: 0;
+      }
+      .site-footer a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .site-footer a:hover {
+        color: var(--text);
+      }
+
+      /* responsive */
+      @media (max-width: 1024px) {
+        .page-body {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
+        .toc {
+          display: none;
+        }
+        .hero__inner {
+          grid-template-columns: 1fr;
+        }
+        .pipeline-card {
+          display: none;
+        }
+      }
+      @media (max-width: 640px) {
+        .feature-grid {
+          grid-template-columns: 1fr;
+        }
+        .site-header__nav a:not(.gh-btn) {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- HEADER -->
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a href="#" class="site-logo">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle
+              cx="8"
+              cy="8"
+              r="7.25"
+              stroke="#3fb950"
+              stroke-width="1.5"
+            />
+            <polygon points="6.5,4.5 12,8 6.5,11.5" fill="#3fb950" />
+          </svg>
+          stream<span class="dot">lapse</span>
+        </a>
+        <nav class="site-header__nav">
+          <a href="#how-it-works">How it works</a>
+          <a href="#setup">Setup</a>
+          <a href="#timelapse">Timelapse</a>
+          <a href="#config">Config</a>
+          <a href="#local-dev">Local dev</a>
+          <a
+            href="https://github.com/kcrnac/streamlapse"
+            target="_blank"
+            rel="noopener"
+            class="gh-btn btn"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+              />
+            </svg>
+            GitHub
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero__inner">
+        <div>
+          <div class="hero__eyebrow">Open source &middot; Free to run</div>
+          <h1>Automatic timelapse<br />from any HLS stream</h1>
+          <p class="hero__desc">
+            Capture frames from any public HLS stream on a configurable
+            schedule, store them in Cloudflare R2, and assemble them into an MP4
+            timelapse on demand — no servers, no cron jobs, no cloud bills.
+          </p>
+          <div class="hero__actions">
+            <a
+              href="https://github.com/kcrnac/streamlapse/fork"
+              target="_blank"
+              rel="noopener"
+              class="btn btn-green"
+              >Fork on GitHub</a
+            >
+            <a href="#setup" class="btn btn-outline">Get started &darr;</a>
+          </div>
+        </div>
+        <div class="pipeline-card">
+          <div class="card-label">How it flows</div>
+          <div class="pipe-step">
+            <div class="p-icon">📡</div>
+            <div class="p-text">
+              <strong>HLS stream</strong>Any public .m3u8 URL
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="p-icon">⚙️</div>
+            <div class="p-text">
+              <strong>GitHub Actions cron</strong>Fires every 5 min — no server
+              needed
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="p-icon">📷</div>
+            <div class="p-text">
+              <strong>capture.py</strong>Schedule check → ffmpeg → JPEG upload
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="p-icon">☁️</div>
+            <div class="p-text">
+              <strong>Cloudflare R2</strong>screenshots/YYYY-MM-DD/HH-MM-SS.jpg
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="p-icon">🎬</div>
+            <div class="p-text">
+              <strong>generate.py (on demand)</strong>Frames → ffmpeg → MP4 → R2
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE BODY -->
+    <div class="page-body">
+      <!-- TOC -->
+      <aside class="toc" aria-label="Table of contents">
+        <div class="toc__label">On this page</div>
+        <ul>
+          <li><a href="#how-it-works">How it works</a></li>
+          <li>
+            <a href="#setup">Setup</a>
+            <ul>
+              <li><a href="#fork">1. Fork the repo</a></li>
+              <li><a href="#r2-bucket">2. Create R2 bucket</a></li>
+              <li><a href="#r2-token">3. Create API token</a></li>
+              <li><a href="#secrets">4. Add secrets</a></li>
+              <li><a href="#schedule">5. Configure schedule</a></li>
+              <li><a href="#verify">6. Verify</a></li>
+            </ul>
+          </li>
+          <li><a href="#timelapse">Generating a timelapse</a></li>
+          <li><a href="#config">Configuration reference</a></li>
+          <li><a href="#local-dev">Local development</a></li>
+        </ul>
+      </aside>
+
+      <!-- Article -->
+      <article>
+        <section class="section" id="how-it-works">
+          <h2>How it works</h2>
+          <p>
+            streamlapse is a zero-infrastructure pipeline built on two free
+            tiers.
+            <strong>GitHub Actions</strong> runs <code>capture.py</code> on a
+            5-minute cron. The script checks whether the current time falls
+            inside your configured work hours and capture interval — if not, it
+            exits with <code>[SKIP]</code>. If yes,
+            <strong>ffmpeg</strong> pulls a single JPEG frame from your HLS
+            stream and uploads it to <strong>Cloudflare R2</strong>. When you
+            want a timelapse, you manually trigger <code>generate.py</code> — it
+            downloads every frame for a date range, stitches them into an MP4,
+            and uploads the result back to R2.
+          </p>
+
+          <div class="feature-grid">
+            <div class="feature-card">
+              <div class="fc-icon">📅</div>
+              <h4>Configurable schedule</h4>
+              <p>
+                Set days, hours, timezone, and capture interval — all in one
+                YAML file.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="fc-icon">☁️</div>
+              <h4>Free storage</h4>
+              <p>
+                Cloudflare R2 gives 10 GB free with zero egress fees. No
+                surprise bills.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="fc-icon">⚙️</div>
+              <h4>No servers</h4>
+              <p>
+                Everything runs on GitHub Actions. Public repos get unlimited
+                free minutes.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="fc-icon">🎬</div>
+              <h4>On-demand timelapse</h4>
+              <p>
+                Trigger MP4 generation from the GitHub Actions UI with a date
+                range, fps, and filename.
+              </p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>GitHub Actions</strong></td>
+                  <td>Free cron scheduler — triggers every 5 min</td>
+                </tr>
+                <tr>
+                  <td><strong>Cloudflare R2</strong></td>
+                  <td>
+                    S3-compatible object storage — 10 GB free, zero egress
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>scripts/capture.py</code></td>
+                  <td>
+                    Schedule check → grabs JPEG via ffmpeg → uploads to R2
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>scripts/generate.py</code></td>
+                  <td>
+                    Downloads frames from R2 → assembles MP4 → uploads back
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p style="font-size: 0.85rem">
+            Frame path:
+            <code>screenshots/YYYY-MM-DD/HH-MM-SS.jpg</code> &nbsp;·&nbsp; Video
+            path: <code>videos/timelapse_&lt;from&gt;_to_&lt;to&gt;.mp4</code>
+          </p>
+        </section>
+
+        <section class="section" id="setup">
+          <h2>Setup</h2>
+
+          <h3 id="fork">1. Fork the repo and make it public</h3>
+          <p>
+            GitHub Actions on <strong>public repos</strong> have unlimited free
+            minutes.
+          </p>
+          <ol class="steps">
+            <li>
+              <div class="st">
+                Click <strong>Fork</strong> on this GitHub repo
+              </div>
+            </li>
+            <li>
+              <div class="st">
+                In your fork go to <strong>Settings → General</strong> and
+                confirm visibility is <strong>Public</strong>
+              </div>
+            </li>
+            <li>
+              <div class="st">
+                Complete the steps below, then push to <code>main</code>
+              </div>
+            </li>
+          </ol>
+
+          <h3 id="r2-bucket">2. Create a Cloudflare R2 bucket</h3>
+          <ol class="steps">
+            <li>
+              <div class="st">
+                Log in to
+                <a
+                  href="https://dash.cloudflare.com/"
+                  target="_blank"
+                  rel="noopener"
+                  >dash.cloudflare.com</a
+                >
+                → <strong>R2 Object Storage</strong> →
+                <strong>Create bucket</strong>
+              </div>
+            </li>
+            <li>
+              <div class="st">
+                Choose a name (e.g. <code>my-streamlapse</code>) and pick your
+                region — <strong>EU</strong>, <strong>US</strong>, or
+                <strong>APAC</strong>
+              </div>
+            </li>
+            <li>
+              <div class="st">
+                Leave all other settings at defaults and click
+                <strong>Create bucket</strong>
+              </div>
+            </li>
+          </ol>
+          <div class="callout">
+            <span class="ci">💡</span>
+            After creation you land on the bucket overview page. Note the
+            <strong>Account ID</strong> in the top-right corner — you'll need it
+            to build your <code>R2_ENDPOINT</code> URL.
+          </div>
+
+          <h3 id="r2-token">3. Create an R2 API token</h3>
+          <ol class="steps">
+            <li>
+              <div class="st">
+                Click <strong>Manage R2 API Tokens</strong> →
+                <strong>Create API Token</strong>
+              </div>
+            </li>
+            <li>
+              <div class="st">
+                Set <strong>Permissions: Object Read &amp; Write</strong> and
+                restrict to your specific bucket
+              </div>
+            </li>
+            <li>
+              <div class="st">
+                Click <strong>Create API Token</strong> — copy the
+                <strong>Access Key ID</strong> and
+                <strong>Secret Access Key</strong> now (shown once only)
+              </div>
+            </li>
+            <li>
+              <div class="st">
+                Copy the
+                <strong>Jurisdiction-specific endpoint for S3 clients</strong> —
+                this is your <code>R2_ENDPOINT</code>
+              </div>
+            </li>
+          </ol>
+
+          <p style="margin-top: 1.25rem; margin-bottom: 0.6rem">
+            Endpoint by bucket region:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Region</th>
+                  <th>R2_ENDPOINT</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>US (default)</td>
+                  <td>
+                    <code
+                      >https://&lt;account_id&gt;.r2.cloudflarestorage.com</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>EU</td>
+                  <td>
+                    <code
+                      >https://&lt;account_id&gt;.eu.r2.cloudflarestorage.com</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>APAC</td>
+                  <td>
+                    <code
+                      >https://&lt;account_id&gt;.apac.r2.cloudflarestorage.com</code
+                    >
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="secrets">4. Add GitHub Secrets</h3>
+          <p>
+            In your fork:
+            <strong
+              >Settings → Secrets and variables → Actions → New repository
+              secret</strong
+            >
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Secret</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>STREAM_URL</code></td>
+                  <td>
+                    Full HLS stream URL, e.g.
+                    <code>https://example.com/stream.m3u8</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>R2_ACCESS_KEY_ID</code></td>
+                  <td>Access Key ID from your R2 API token</td>
+                </tr>
+                <tr>
+                  <td><code>R2_SECRET_ACCESS_KEY</code></td>
+                  <td>Secret Access Key from your R2 API token</td>
+                </tr>
+                <tr>
+                  <td><code>R2_BUCKET_NAME</code></td>
+                  <td>Your R2 bucket name, e.g. <code>my-streamlapse</code></td>
+                </tr>
+                <tr>
+                  <td><code>R2_ENDPOINT</code></td>
+                  <td>Full S3 endpoint URL for your bucket's region</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 id="schedule">5. Configure the schedule</h3>
+          <p>
+            Edit <code>config.yml</code> to match your timezone, active days,
+            hours, and capture frequency. The GitHub Actions cron always fires
+            every 5 minutes (the platform minimum) — all schedule logic runs
+            inside <code>capture.py</code>, so you only ever edit
+            <code>config.yml</code>.
+          </p>
+          <div class="code-block">
+            <div class="code-block__header">config.yml</div>
+            <pre><code>schedule:
+  timezone: 'Europe/Zagreb'          # any IANA timezone
+  work_days: [Mon, Tue, Wed, Thu, Fri]
+  work_hours:
+    start: '07:00'
+    end: '17:00'
+
+capture:
+  interval_minutes: 5   # 5, 10, 15, 30, or 60</code></pre>
+          </div>
+
+          <h3 id="verify">6. Push and verify</h3>
+          <p>
+            After pushing go to
+            <strong>Actions → Capture Frame → Run workflow</strong>. Outside
+            configured work hours the run exits with <code>[SKIP]</code> — that
+            is expected. Set the <code>force</code> dispatch input to
+            <code>true</code> to bypass all checks for a quick test.
+          </p>
+        </section>
+
+        <section class="section" id="timelapse">
+          <h2>Generating a timelapse</h2>
+          <p>
+            Go to <strong>Actions → Generate Timelapse → Run workflow</strong>,
+            fill in the optional inputs, and click
+            <strong>Run workflow</strong>. When the run finishes the MP4 is
+            available as a downloadable <strong>artifact</strong> in the run
+            summary and is also uploaded to R2 under <code>videos/</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Input</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>date_from</code></td>
+                  <td>first day of current month</td>
+                  <td>Start date <code>YYYY-MM-DD</code></td>
+                </tr>
+                <tr>
+                  <td><code>date_to</code></td>
+                  <td>today</td>
+                  <td>End date <code>YYYY-MM-DD</code></td>
+                </tr>
+                <tr>
+                  <td><code>fps</code></td>
+                  <td><code>24</code></td>
+                  <td>Output video frame rate</td>
+                </tr>
+                <tr>
+                  <td><code>output</code></td>
+                  <td>auto-generated</td>
+                  <td>Output filename, e.g. <code>april.mp4</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" id="config">
+          <h2>Configuration reference</h2>
+          <p>
+            All tuneable settings live in <code>config.yml</code> at the root of
+            the repo.
+          </p>
+          <div class="code-block">
+            <div class="code-block__header">config.yml — full reference</div>
+            <pre><code>schedule:
+  timezone: 'Europe/Zagreb'          # IANA timezone for work_days/work_hours checks
+  work_days: [Mon, Tue, Wed, Thu, Fri]
+  work_hours:
+    start: '07:00'
+    end: '17:00'
+
+capture:
+  interval_minutes: 5   # capture frequency (5, 10, 15, 30, or 60)
+                        # cron fires every 5 min; this check runs in capture.py
+  jpeg_quality: 3       # ffmpeg -q:v: 1 (best) – 31 (worst); 2–4 is a good range
+  ffmpeg_timeout: 30    # seconds before giving up on the stream
+
+storage:
+  r2_prefix: 'screenshots'    # R2 key prefix for captured frames
+  videos_prefix: 'videos'     # R2 key prefix for generated timelapse videos
+
+generate:
+  default_fps: 24              # output video frame rate
+  video_scale: '1920:-2'       # width; -2 auto-scales height (must be divisible by 2)</code></pre>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>schedule.timezone</code></td>
+                  <td><code>Europe/Zagreb</code></td>
+                  <td>Any valid IANA timezone string</td>
+                </tr>
+                <tr>
+                  <td><code>schedule.work_days</code></td>
+                  <td>Mon–Fri</td>
+                  <td>Days on which captures are allowed</td>
+                </tr>
+                <tr>
+                  <td><code>schedule.work_hours</code></td>
+                  <td>07:00–17:00</td>
+                  <td>Time window in the configured timezone</td>
+                </tr>
+                <tr>
+                  <td><code>capture.interval_minutes</code></td>
+                  <td><code>5</code></td>
+                  <td>
+                    How often a frame is captured — multiple of 5, up to 60
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>capture.jpeg_quality</code></td>
+                  <td><code>3</code></td>
+                  <td>
+                    ffmpeg <code>-q:v</code> — lower is better quality and
+                    larger file size
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>capture.ffmpeg_timeout</code></td>
+                  <td><code>30</code></td>
+                  <td>Seconds before ffmpeg gives up on the stream</td>
+                </tr>
+                <tr>
+                  <td><code>generate.default_fps</code></td>
+                  <td><code>24</code></td>
+                  <td>Frames per second for the assembled MP4</td>
+                </tr>
+                <tr>
+                  <td><code>generate.video_scale</code></td>
+                  <td><code>1920:-2</code></td>
+                  <td>
+                    Output width; <code>-2</code> auto-scales height preserving
+                    aspect ratio
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" id="local-dev">
+          <h2>Local development</h2>
+          <div class="code-block">
+            <div class="code-block__header">bash</div>
+            <pre><code>python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# Set required environment variables
+export STREAM_URL=https://example.com/stream.m3u8
+export R2_ACCESS_KEY_ID=your_access_key_id
+export R2_SECRET_ACCESS_KEY=your_secret_access_key
+export R2_BUCKET_NAME=my-streamlapse
+export R2_ENDPOINT=https://&lt;account_id&gt;.eu.r2.cloudflarestorage.com
+
+# Test capture (--force bypasses work-hours and interval checks)
+python scripts/capture.py --force
+
+# Generate timelapse for a date range
+python scripts/generate.py --date-from 2026-04-01 --date-to 2026-04-07 --fps 12</code></pre>
+          </div>
+        </section>
+      </article>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="site-footer">
+      <div class="site-footer__inner">
+        <p>streamlapse is open source and free to use.</p>
+        <p>
+          <a
+            href="https://github.com/kcrnac/streamlapse"
+            target="_blank"
+            rel="noopener"
+            >View on GitHub</a
+          >
+          &nbsp;·&nbsp;
+          <a
+            href="https://github.com/kcrnac/streamlapse/blob/main/README.md"
+            target="_blank"
+            rel="noopener"
+            >README</a
+          >
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      const sections = document.querySelectorAll('[id]');
+      const links = document.querySelectorAll('.toc a');
+      new IntersectionObserver(
+        (entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              links.forEach((a) => a.classList.remove('active'));
+              const m = document.querySelector(
+                `.toc a[href="#${e.target.id}"]`,
+              );
+              if (m) m.classList.add('active');
+            }
+          });
+        },
+        { rootMargin: '-20% 0px -70% 0px' },
+      ).observe;
+      sections.forEach((s) =>
+        new IntersectionObserver(
+          (entries) => {
+            entries.forEach((e) => {
+              if (e.isIntersecting) {
+                links.forEach((a) => a.classList.remove('active'));
+                const m = document.querySelector(
+                  `.toc a[href="#${e.target.id}"]`,
+                );
+                if (m) m.classList.add('active');
+              }
+            });
+          },
+          { rootMargin: '-20% 0px -70% 0px' },
+        ).observe(s),
+      );
+    </script>
+  </body>
+</html>
