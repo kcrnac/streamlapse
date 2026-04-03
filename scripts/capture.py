@@ -104,14 +104,6 @@ def main() -> None:
         print(f"[SKIP] Outside work hours: {now.strftime('%A %Y-%m-%d %H:%M')} {cfg['schedule']['timezone']}")
         sys.exit(0)
 
-    if not force:
-        interval = cfg["capture"].get("interval_minutes", 5)
-        tz = ZoneInfo(cfg["schedule"]["timezone"])
-        now = datetime.now(tz)
-        if now.minute % interval != 0:
-            print(f"[SKIP] Not on capture interval ({interval} min, current minute: {now.minute})")
-            sys.exit(0)
-
     if force:
         print("[INFO] --force flag set, bypassing work-hours and interval checks.")
 
