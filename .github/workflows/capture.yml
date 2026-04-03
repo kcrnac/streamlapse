@@ -2,10 +2,10 @@ name: Capture Frame
 
 on:
   schedule:
-    # Triggers every 5 minutes (GitHub's minimum). Capture interval, work days,
+    # Triggers every 30 minutes. Capture interval, work days,
     # and work hours are all configured in config.yml — capture.py skips
     # any run that falls outside those settings.
-    - cron: '*/5 * * * *'
+    - cron: '*/30 * * * *'
   # Allow manual trigger for testing
   workflow_dispatch:
     inputs:
