@@ -657,7 +657,7 @@
           <div class="pipe-step">
             <div class="p-icon">⚙️</div>
             <div class="p-text">
-              <strong>GitHub Actions cron</strong>Fires every 5 min — no server
+              <strong>GitHub Actions cron</strong>Fires every 15 min — no server
               needed
             </div>
           </div>
@@ -771,7 +771,7 @@
               <tbody>
                 <tr>
                   <td><strong>GitHub Actions</strong></td>
-                  <td>Free cron scheduler — triggers every 5 min</td>
+                  <td>Free cron scheduler — triggers every 15 min</td>
                 </tr>
                 <tr>
                   <td><strong>Cloudflare R2</strong></td>
@@ -983,7 +983,7 @@
           <p>
             Edit <code>config.yml</code> to match your timezone, active days,
             hours, and capture frequency. The GitHub Actions cron always fires
-            every 5 minutes (the platform minimum) — all schedule logic runs
+            every 15 minutes — all schedule logic runs
             inside <code>capture.py</code>, so you only ever edit
             <code>config.yml</code>.
           </p>
@@ -991,13 +991,13 @@
             <div class="code-block__header">config.yml</div>
             <pre><code>schedule:
   timezone: 'Europe/Zagreb'          # any IANA timezone
-  work_days: [Mon, Tue, Wed, Thu, Fri]
+  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
     start: '07:00'
     end: '17:00'
 
 capture:
-  interval_minutes: 5   # 5, 10, 15, 30, or 60</code></pre>
+  interval_minutes: 15   # 5, 10, 15, 30, or 60</code></pre>
           </div>
 
           <h3 id="verify">6. Push and verify</h3>
@@ -1064,14 +1064,14 @@ capture:
             <div class="code-block__header">config.yml — full reference</div>
             <pre><code>schedule:
   timezone: 'Europe/Zagreb'          # IANA timezone for work_days/work_hours checks
-  work_days: [Mon, Tue, Wed, Thu, Fri]
+  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
     start: '07:00'
     end: '17:00'
 
 capture:
-  interval_minutes: 5   # capture frequency (5, 10, 15, 30, or 60)
-                        # cron fires every 5 min; this check runs in capture.py
+  interval_minutes: 15   # capture frequency (5, 10, 15, 30, or 60)
+                         # cron fires every 15 min; this check runs in capture.py
   jpeg_quality: 3       # ffmpeg -q:v: 1 (best) – 31 (worst); 2–4 is a good range
   ffmpeg_timeout: 30    # seconds before giving up on the stream
 
@@ -1100,7 +1100,7 @@ generate:
                 </tr>
                 <tr>
                   <td><code>schedule.work_days</code></td>
-                  <td>Mon–Fri</td>
+                  <td>Mon–Sat</td>
                   <td>Days on which captures are allowed</td>
                 </tr>
                 <tr>
