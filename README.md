@@ -1,6 +1,6 @@
 # streamlapse
 
-**streamlapse** automatically captures a JPEG frame from any public HLS stream every 5 minutes (during configurable work hours), stores the frames in Cloudflare R2, and lets you assemble any date range into an MP4 timelapse on demand — all for free, with zero infrastructure to manage.
+**streamlapse** automatically captures a JPEG frame from any public HLS stream every 15 minutes (during configurable work hours), stores the frames in Cloudflare R2, and lets you assemble any date range into an MP4 timelapse on demand — all for free, with zero infrastructure to manage.
 
 Everything runs on **GitHub Actions** (free on public repos) and **Cloudflare R2** (10 GB free tier, zero egress fees). No servers, no cron jobs, no cloud bills.
 
@@ -11,7 +11,7 @@ Everything runs on **GitHub Actions** (free on public repos) and **Cloudflare R2
 ```
 HLS stream
     │
-    ▼  every 5 min (GitHub Actions cron)
+    ▼  every 15 min (GitHub Actions cron)
 capture.py ──► ffmpeg grabs 1 JPEG frame
     │
     ▼
@@ -27,12 +27,12 @@ Cloudflare R2  videos/timelapse_<from>_to_<to>.mp4
 
 | Component                 | Role                                                              |
 | ------------------------- | ----------------------------------------------------------------- |
-| **GitHub Actions**        | Free cron scheduler — runs `capture.py` every 5 minutes           |
+| **GitHub Actions**        | Free cron scheduler — runs `capture.py` every 15 minutes          |
 | **Cloudflare R2**         | S3-compatible object storage — 10 GB free, zero egress fees       |
 | **`scripts/capture.py`**  | Checks work hours → grabs JPEG frame via `ffmpeg` → uploads to R2 |
 | **`scripts/generate.py`** | Downloads frames from R2 → assembles MP4 → uploads back to R2     |
 
-Capture schedule: configurable in `config.yml` (default: Mon–Fri 07:00–17:00, every 5 minutes).
+Capture schedule: configurable in `config.yml` (default: Mon–Sat 07:00–17:00, every 15 minutes).
 
 ---
 
@@ -95,7 +95,7 @@ Edit [`config.yml`](config.yml) to match your stream's timezone and active hours
 ```yaml
 schedule:
   timezone: 'Europe/Zagreb' # any IANA timezone
-  work_days: [Mon, Tue, Wed, Thu, Fri]
+  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
     start: '07:00'
     end: '17:00'
@@ -155,13 +155,13 @@ All tuneable settings live in [`config.yml`](config.yml):
 ```yaml
 schedule:
   timezone: 'Europe/Zagreb' # IANA timezone string
-  work_days: [Mon, Tue, Wed, Thu, Fri]
+  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
     start: '07:00'
     end: '17:00'
 
 capture:
-  interval_minutes: 5 # how often to capture (5, 10, 15, 30, or 60)
+  interval_minutes: 15 # how often to capture (5, 10, 15, 30, or 60)
   jpeg_quality: 3 # ffmpeg -q:v: 1 (best) – 31 (worst); 2–4 is a good range
   ffmpeg_timeout: 30 # seconds to wait for the stream before giving up
 
