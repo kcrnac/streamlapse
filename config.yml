@@ -10,7 +10,6 @@ schedule:
     end: '17:00'
 
 capture:
-  interval_minutes: 15 # how often to capture (5, 10, 15, 30, or 60)
   jpeg_quality: 3 # ffmpeg -q:v: 1 (best) – 31 (worst), 2-4 is good
   ffmpeg_timeout: 30 # seconds to wait for stream before giving up
 
