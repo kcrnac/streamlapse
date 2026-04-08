@@ -6,7 +6,7 @@ schedule:
   timezone: 'Europe/Zagreb'
   work_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   work_hours:
-    start: '06:45'
+    start: '06:30'
     end: '17:00'
 
 capture:
