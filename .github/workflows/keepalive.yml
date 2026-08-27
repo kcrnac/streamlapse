@@ -2,9 +2,10 @@ name: Keepalive
 
 on:
   schedule:
-    # Runs monthly, well within GitHub's 60-day inactivity window that
-    # auto-disables scheduled workflows (like capture.yml).
-    - cron: '0 0 1 * *'
+    # Run twice monthly, offset from high-load hour boundaries.
+    # Each successful run creates repository activity well within GitHub's
+    # 60-day inactivity window for scheduled workflows.
+    - cron: '13 3 1,15 * *'
   workflow_dispatch:
 
 jobs:
@@ -13,20 +14,22 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
+      - name: Checkout default branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
 
       - name: Record keepalive timestamp
         run: |
           mkdir -p .github
           date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/.keepalive
 
-      - name: Commit and push if changed
+      - name: Commit and push
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- .github/.keepalive; then
-            git add .github/.keepalive
-            git commit -m "chore: keepalive to prevent scheduled workflow disable"
-            git push
-          fi
+          git add .github/.keepalive
+          git commit -m "chore: refresh workflow keepalive"
+          git push origin "HEAD:${DEFAULT_BRANCH}"
