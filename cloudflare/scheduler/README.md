@@ -32,5 +32,12 @@ pnpm wrangler secret put GITHUB_TOKEN
 pnpm deploy
 ```
 
+Pull requests that change this directory run type-checks and tests. Once merged
+to `main`, `.github/workflows/deploy-cloudflare-scheduler.yml` deploys the Worker
+through the GitHub `production` environment. That environment contains the
+`CLOUDFLARE_API_TOKEN` secret and `CLOUDFLARE_ACCOUNT_ID` variable; neither is a
+Worker runtime binding. The existing `GITHUB_TOKEN` Worker secret is preserved
+across code-only deployments.
+
 GitHub Actions does not have its own capture cron. Keep `workflow_dispatch` in
 `capture.yml`: it is the API entry point used by this Worker and by manual runs.

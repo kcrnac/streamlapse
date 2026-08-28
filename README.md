@@ -9,7 +9,7 @@ Scheduling runs on a **Cloudflare Worker Cron Trigger**, capture and video jobs 
 ## How it works
 
 ```
-Cloudflare Worker  ── every 5 min heartbeat ──► reads schedule from config.yml
+Cloudflare Worker  ── every 15 min cron ──► reads schedule from config.yml
     │
     ▼  eligible times only (workflow_dispatch)
 GitHub Actions ──► capture.py ──► ffmpeg grabs 1 JPEG frame from the HLS stream
@@ -112,7 +112,9 @@ Trigger in `cloudflare/scheduler/wrangler.jsonc`.
 
 ### 6. Deploy the Cloudflare scheduler
 
-Create a fine-grained GitHub personal access token restricted to this repository with **Actions: Read and write** permission. Then deploy the Worker and enter the token when prompted:
+The Worker needs a fine-grained GitHub personal access token restricted to this
+repository with **Actions: Read and write** permission. Store this runtime token
+once in Cloudflare, then perform the first deployment:
 
 ```bash
 cd cloudflare/scheduler
@@ -123,11 +125,28 @@ pnpm wrangler secret put GITHUB_TOKEN
 pnpm deploy
 ```
 
+Future Worker changes are validated in pull requests and deployed automatically
+after they reach `main` by the **Deploy Cloudflare Scheduler** workflow. Create a
+GitHub environment named `production` under **Settings → Environments** and add:
+
+| Type                 | Name                    | Value                                                                    |
+| -------------------- | ----------------------- | ------------------------------------------------------------------------ |
+| Environment secret   | `CLOUDFLARE_API_TOKEN`  | Cloudflare API token created from the **Edit Cloudflare Workers** template |
+| Environment variable | `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare account ID that owns the Worker                           |
+
+Restrict the Cloudflare token to the account that owns this Worker. It is a CI
+deployment credential and is separate from the Worker's `GITHUB_TOKEN` runtime
+secret. No R2 permission is needed to deploy this scheduler. Existing Worker
+secrets that are not supplied by the deployment are preserved.
+
 Cloudflare invokes the Worker at `00`, `15`, `30`, and `45` past every hour from
 Monday through Saturday. The Worker reads the current schedule from `config.yml`
 and calls the Capture Frame workflow only inside the configured window. It does
 not run on Sunday. The GitHub workflow intentionally has no `schedule` trigger;
 `workflow_dispatch` is its only entry point.
+
+Because no GitHub workflow is responsible for recurring capture scheduling, a
+repository keepalive workflow is not needed.
 
 ### 7. Push and verify
 
