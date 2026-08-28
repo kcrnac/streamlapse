@@ -29,6 +29,6 @@
     "required": ["GITHUB_TOKEN"]
   },
   "triggers": {
-    "crons": ["*/15 * * * MON-SAT"]
+    "crons": ["*/15 4-17 * * MON-SAT"]
   }
 }

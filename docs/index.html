@@ -659,7 +659,7 @@
             <div class="p-icon">⚙️</div>
             <div class="p-text">
               <strong>Cloudflare Worker cron</strong>Evaluates the schedule every
-              15 minutes, Monday–Saturday
+              15 minutes in its UTC window, Monday–Saturday
             </div>
           </div>
           <div class="pipe-step">
@@ -716,9 +716,10 @@
           <p>
             streamlapse is a serverless pipeline built on GitHub and Cloudflare.
             A <strong>Cloudflare Worker Cron Trigger</strong> runs at 00, 15, 30,
-            and 45 minutes past each hour from Monday through Saturday. It uses
-            the schedule in <code>wrangler.jsonc</code> and dispatches the GitHub
-            Actions capture workflow only during eligible Zagreb-local times.
+            and 45 minutes past each hour from 04:00 through 17:45 UTC, Monday
+            through Saturday. It uses the schedule in
+            <code>wrangler.jsonc</code> and dispatches the GitHub Actions capture
+            workflow only during eligible Zagreb-local times.
             <strong>ffmpeg</strong> then pulls one JPEG frame from the HLS stream
             and uploads it to <strong>Cloudflare R2</strong>. Timelapse generation
             is a separate on-demand workflow that downloads a selected date
@@ -771,7 +772,7 @@
               <tbody>
                 <tr>
                   <td><strong>Cloudflare Worker</strong></td>
-                  <td>Evaluates the schedule every 15 minutes and dispatches capture</td>
+                  <td>Evaluates the schedule every 15 minutes in the UTC trigger window and dispatches capture</td>
                 </tr>
                 <tr>
                   <td><strong>GitHub Actions</strong></td>
@@ -987,10 +988,11 @@
           <h3 id="schedule">5. Configure the schedule</h3>
           <p>
             Edit <code>cloudflare/scheduler/wrangler.jsonc</code>. The Cron
-            expression supplies the Monday-through-Saturday, 15-minute cadence;
-            the variables define the local timezone and active hours. Cloudflare
-            Cron uses UTC, so the Worker performs the small local-time check to
-            stay correct across Zagreb daylight-saving changes.
+            expression supplies the Monday-through-Saturday, 15-minute cadence
+            and limits invocations to the UTC hours covering both CET and CEST.
+            The variables define the local timezone and active hours, and the
+            Worker performs the exact local-time check to stay correct across
+            Zagreb daylight-saving changes.
           </p>
           <div class="code-block">
             <div class="code-block__header">cloudflare/scheduler/wrangler.jsonc</div>
@@ -1000,7 +1002,7 @@
   "SCHEDULE_END": "18:00"
 },
 "triggers": {
-  "crons": ["*/15 * * * MON-SAT"]
+  "crons": ["*/15 4-17 * * MON-SAT"]
 }</code></pre>
           </div>
 
@@ -1127,7 +1129,7 @@ generate:
                 <tr>
                   <td><code>triggers.crons</code></td>
                   <td>Mon–Sat</td>
-                  <td>UTC weekday guard and 15-minute cadence</td>
+                  <td>UTC weekday, hour-window, and 15-minute cadence</td>
                 </tr>
                 <tr>
                   <td><code>SCHEDULE_START/END</code></td>

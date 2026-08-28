@@ -33,7 +33,7 @@ function zagrebInstant(localIso: string, utcOffset: "+01:00" | "+02:00"): number
 function scheduledController(scheduledTime: number) {
   return {
     scheduledTime,
-    cron: "*/15 * * * MON-SAT",
+    cron: "*/15 4-17 * * MON-SAT",
     noRetry: vi.fn(),
   } satisfies ScheduledController;
 }

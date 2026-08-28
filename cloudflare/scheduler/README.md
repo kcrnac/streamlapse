@@ -2,7 +2,8 @@
 
 This Worker is the only automatic scheduler for
 `.github/workflows/capture.yml`. Cloudflare invokes it at `00`, `15`, `30`, and
-`45` past every hour from Monday through Saturday. It is not invoked on Sunday.
+`45` past each hour from 04:00 through 17:45 UTC, Monday through Saturday. It
+is not invoked on Sunday.
 
 All automatic schedule configuration lives in `wrangler.jsonc`:
 
@@ -13,14 +14,15 @@ All automatic schedule configuration lives in `wrangler.jsonc`:
   "SCHEDULE_END": "18:00"
 },
 "triggers": {
-  "crons": ["*/15 * * * MON-SAT"]
+  "crons": ["*/15 4-17 * * MON-SAT"]
 }
 ```
 
-Cloudflare Cron Triggers use UTC, so the Cron expression handles the weekday
-and 15-minute cadence while the Worker checks the configured local-time window.
-This keeps the 06:30–18:00 Zagreb schedule correct across CET/CEST changes. The
-Worker does not download or parse `config.yml`.
+Cloudflare Cron Triggers use UTC. The Cron expression limits invocations to the
+UTC hours that cover the configured Zagreb window in both CET and CEST. The
+Worker then checks the exact local-time boundary. This keeps the 06:30–18:00
+Zagreb schedule correct across daylight-saving changes without invoking the
+Worker overnight. The Worker does not download or parse `config.yml`.
 
 Inside the window, the Worker calls GitHub's workflow-dispatch API once and
 passes `SCHEDULE_TIME_ZONE` to the capture workflow for the R2 timestamp. A
