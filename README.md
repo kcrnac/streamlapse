@@ -145,8 +145,9 @@ and calls the Capture Frame workflow only inside the configured window. It does
 not run on Sunday. The GitHub workflow intentionally has no `schedule` trigger;
 `workflow_dispatch` is its only entry point.
 
-Because no GitHub workflow is responsible for recurring capture scheduling, a
-repository keepalive workflow is not needed.
+The separate Keepalive workflow remains scheduled twice monthly as a repository
+activity safeguard. It does not trigger captures or affect the Cloudflare
+scheduler.
 
 ### 7. Push and verify
 
