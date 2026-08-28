@@ -7,10 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
     devDependencies:
       '@cloudflare/vitest-plugin':
         specifier: 1.1.1
@@ -1808,7 +1804,8 @@ snapshots:
 
   ws@8.21.0: {}
 
-  yaml@2.9.0: {}
+  yaml@2.9.0:
+    optional: true
 
   youch-core@0.3.3:
     dependencies:

@@ -2,8 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "streamlapse-scheduler",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-27",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_date": "2026-08-28",
   "workers_dev": false,
   "preview_urls": false,
   "observability": {
@@ -21,7 +20,10 @@
   "vars": {
     "GITHUB_OWNER": "kcrnac",
     "GITHUB_REPO": "streamlapse",
-    "GITHUB_REF": "main"
+    "GITHUB_REF": "main",
+    "SCHEDULE_TIME_ZONE": "Europe/Zagreb",
+    "SCHEDULE_START": "06:30",
+    "SCHEDULE_END": "18:00"
   },
   "secrets": {
     "required": ["GITHUB_TOKEN"]

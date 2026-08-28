@@ -9,7 +9,7 @@ Scheduling runs on a **Cloudflare Worker Cron Trigger**, capture and video jobs 
 ## How it works
 
 ```
-Cloudflare Worker  ── every 15 min cron ──► reads schedule from config.yml
+Cloudflare Worker  ── every 15 min, Mon–Sat ──► checks Zagreb 06:30–18:00
     │
     ▼  eligible times only (workflow_dispatch)
 GitHub Actions ──► capture.py ──► ffmpeg grabs 1 JPEG frame from the HLS stream
@@ -27,19 +27,18 @@ Cloudflare R2  videos/timelapse_<from>_to_<to>.mp4
 
 | Component                            | Role                                                                  |
 | ------------------------------------ | --------------------------------------------------------------------- |
-| **Cloudflare Worker Cron Trigger**   | Reads `config.yml` and dispatches eligible captures                   |
+| **Cloudflare Worker Cron Trigger**   | Applies the Wrangler schedule and dispatches eligible captures        |
 | **GitHub Actions**                   | Runs capture and on-demand timelapse jobs                             |
 | **Cloudflare R2**                    | S3-compatible object storage with a free allowance and free egress     |
-| **`scripts/capture.py`**             | Validates non-forced runs, grabs one JPEG with `ffmpeg`, uploads to R2 |
+| **`scripts/capture.py`**             | Grabs one JPEG with `ffmpeg` and uploads it to R2                      |
 | **`scripts/generate.py`**            | Downloads frames from R2, assembles an MP4, uploads it back to R2      |
 
-`config.yml` is the runtime source of truth for the capture timezone, work days,
-and active window. Cloudflare is the only automatic scheduler. Its Cron Trigger
-defines the fixed 15-minute cadence and an outer Monday-through-Saturday guard;
-the Worker then applies `config.yml`. The effective schedule is therefore the
-intersection of both controls. The current settings capture Monday through
-Saturday from 06:30 through 18:00 in `Europe/Zagreb`; neither the Worker nor the
-capture workflow runs automatically on Sunday.
+[`cloudflare/scheduler/wrangler.jsonc`](cloudflare/scheduler/wrangler.jsonc) is
+the single source of truth for automatic scheduling. Its Cron Trigger runs every
+15 minutes from Monday through Saturday, and its variables define the
+`Europe/Zagreb` 06:30–18:00 window. The Worker does not download repository
+configuration. [`config.yml`](config.yml) contains only capture, storage, and
+video settings.
 
 ---
 
@@ -52,7 +51,7 @@ GitHub's current Actions usage policy. The simplest path:
 
 1. Click **Fork** on this repo
 2. In the fork, go to **Settings → General** and make sure visibility is **Public**
-3. Make your edits (configure `config.yml`, add secrets) and push to `main`
+3. Make your edits (configure Wrangler and `config.yml`, add secrets) and push to `main`
 
 ### 2. Create a Cloudflare R2 bucket
 
@@ -98,23 +97,26 @@ In your forked repo: **Settings → Secrets and variables → Actions → New re
 
 ### 5. Configure the schedule
 
-Edit [`config.yml`](config.yml) to match your stream's timezone and active hours:
+Edit [`cloudflare/scheduler/wrangler.jsonc`](cloudflare/scheduler/wrangler.jsonc).
+The Cron expression restricts invocations to Monday through Saturday and every
+15 minutes; the variables define the local-time window:
 
-```yaml
-schedule:
-  timezone: 'Europe/Zagreb' # any IANA timezone
-  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
-  work_hours:
-    start: '06:30'
-    end: '18:00'
+```jsonc
+"vars": {
+  "SCHEDULE_TIME_ZONE": "Europe/Zagreb",
+  "SCHEDULE_START": "06:30",
+  "SCHEDULE_END": "18:00"
+},
+"triggers": {
+  "crons": ["*/15 * * * MON-SAT"]
+}
 ```
 
-The Cloudflare Worker reads this file directly from the configured GitHub ref
-before every scheduling decision. The timezone and work-hour window are not
-duplicated in Worker code. The 15-minute cadence and the outer Monday-through-
-Saturday invocation guard live in `cloudflare/scheduler/wrangler.jsonc`; keep
-that guard aligned if you intentionally change `schedule.work_days` to include
-Sunday.
+Cloudflare Cron Triggers use UTC. The weekday and 15-minute cadence can live in
+the Cron expression, but a fixed Zagreb-local window cannot because Zagreb
+switches between CET and CEST. The Worker therefore performs only the small
+local-time check before dispatching GitHub. This preserves 06:30–18:00 through
+daylight-saving changes without fetching configuration from GitHub.
 
 ### 6. Deploy the Cloudflare scheduler
 
@@ -126,7 +128,10 @@ own owner and repository:
 "vars": {
   "GITHUB_OWNER": "your-github-user",
   "GITHUB_REPO": "streamlapse",
-  "GITHUB_REF": "main"
+  "GITHUB_REF": "main",
+  "SCHEDULE_TIME_ZONE": "Europe/Zagreb",
+  "SCHEDULE_START": "06:30",
+  "SCHEDULE_END": "18:00"
 }
 ```
 
@@ -160,10 +165,10 @@ secret. No R2 permission is needed to deploy this scheduler. Existing Worker
 secrets that are not supplied by the deployment are preserved.
 
 Cloudflare invokes the Worker at `00`, `15`, `30`, and `45` past every hour from
-Monday through Saturday. The Worker reads the current schedule from `config.yml`
-and calls the Capture Frame workflow only inside the configured window. It does
-not run on Sunday. The GitHub workflow intentionally has no `schedule` trigger;
-`workflow_dispatch` is its only entry point.
+Monday through Saturday. The Worker checks the Wrangler schedule variables and
+calls the Capture Frame workflow only inside the configured local window. It is
+not invoked on Sunday. The GitHub workflow intentionally has no `schedule`
+trigger; `workflow_dispatch` is its only entry point.
 
 The separate Keepalive workflow remains scheduled twice monthly as a repository
 activity safeguard. It does not trigger captures or affect the Cloudflare
@@ -171,7 +176,10 @@ scheduler.
 
 ### 7. Push and verify
 
-After pushing your changes, go to **Actions → Capture Frame → Run workflow** and click **Run workflow**. If it is outside the configured schedule, a normal manual run exits with `[SKIP]`. Pass `force: true` to bypass the schedule for testing. Automatic Cloudflare dispatches use `force: true` only after the Worker has evaluated `config.yml`.
+After pushing your changes, go to **Actions → Capture Frame → Run workflow** and
+click **Run workflow**. Manual runs always capture; the optional timezone input
+controls the R2 timestamp and defaults to `Europe/Zagreb`. The automatic Worker
+passes its configured timezone explicitly.
 
 ---
 
@@ -219,18 +227,11 @@ Generate a PAT at **GitHub → Settings → Developer settings → Personal acce
 
 ## Configuration reference
 
-Capture and media settings live in [`config.yml`](config.yml). The fixed cron
-cadence and GitHub repository target live in
+Capture and media settings live in [`config.yml`](config.yml). The automatic
+schedule and GitHub repository target live in
 [`cloudflare/scheduler/wrangler.jsonc`](cloudflare/scheduler/wrangler.jsonc):
 
 ```yaml
-schedule:
-  timezone: 'Europe/Zagreb' # IANA timezone string
-  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
-  work_hours:
-    start: '06:30'
-    end: '18:00'
-
 capture:
   jpeg_quality: 3 # ffmpeg -q:v: 1 (best) – 31 (worst); 2–4 is a good range
   ffmpeg_timeout: 30 # seconds to wait for the stream before giving up
@@ -259,9 +260,10 @@ export R2_ACCESS_KEY_ID=your_access_key_id
 export R2_SECRET_ACCESS_KEY=your_secret_access_key
 export R2_BUCKET_NAME=my-streamlapse
 export R2_ENDPOINT=https://<account_id>.eu.r2.cloudflarestorage.com
+export CAPTURE_TIME_ZONE=Europe/Zagreb
 
-# Test capture (--force bypasses the work-hours check)
-python scripts/capture.py --force
+# Test capture (requires ffmpeg on PATH)
+python scripts/capture.py
 
 # Generate timelapse for a date range
 python scripts/generate.py --date-from 2026-04-01 --date-to 2026-04-07 --fps 12
@@ -278,11 +280,11 @@ hash-locked transitive install file generated from it. Dependency updates are
 reviewed and applied manually; this repository does not run an automated
 dependency-update bot.
 
-The capture workflow caches a SHA-256-verified, immutable Linux FFmpeg build.
-This is intentional: the smaller Linux executable bundled by
-`imageio-ffmpeg==0.6.0` can crash while demuxing some HLS/MPEG-TS streams. On
-Linux, run `.github/scripts/setup-ffmpeg-linux.sh` once before a local capture.
-Windows local runs continue to use the verified bundled executable.
+Both media workflows call `ffmpeg` directly from `PATH`. GitHub Actions caches a
+SHA-256-verified, immutable Linux build installed by
+`.github/scripts/setup-ffmpeg-linux.sh`; this keeps CI reproducible and avoids a
+mutable `latest` download. For local runs, install FFmpeg through your normal
+package manager and ensure `ffmpeg -version` works.
 
 ---
 

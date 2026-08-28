@@ -5,14 +5,11 @@ on:
   # the Worker, API clients, and manual tests can all invoke the same workflow.
   workflow_dispatch:
     inputs:
-      force:
-        description: 'Bypass work-hours check (useful for testing outside work hours)'
+      timezone:
+        description: 'IANA timezone used for the screenshot timestamp'
         required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
+        default: 'Europe/Zagreb'
+        type: string
 
 permissions:
   contents: read
@@ -42,14 +39,16 @@ jobs:
           key: ffmpeg-linux-x64-n8.1.2-47-g156bb4d299-90f0f2d8326a
 
       - name: Set up verified FFmpeg
-        run: bash .github/scripts/setup-ffmpeg-linux.sh
+        run: |
+          bash .github/scripts/setup-ffmpeg-linux.sh
+          echo "$GITHUB_WORKSPACE/.cache/ffmpeg" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: pip install --require-hashes -r requirements.txt
 
       - name: Capture and upload frame
         env:
-          CAPTURE_FORCE: ${{ inputs.force }}
+          CAPTURE_TIME_ZONE: ${{ inputs.timezone }}
           STREAM_URL: ${{ secrets.STREAM_URL }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

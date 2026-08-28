@@ -1,7 +1,6 @@
 """
 capture.py — Grab a single JPEG frame from the HLS stream and upload to Cloudflare R2.
 
-Exits with code 0 (no-op) when called outside configured work hours/days.
 Exits with code 1 on unrecoverable errors.
 
 Required environment variables (set as GitHub Secrets):
@@ -10,6 +9,7 @@ Required environment variables (set as GitHub Secrets):
   R2_SECRET_ACCESS_KEY
   R2_BUCKET_NAME
   R2_ENDPOINT      Full S3 endpoint URL (e.g. https://<account_id>.eu.r2.cloudflarestorage.com)
+  CAPTURE_TIME_ZONE  IANA timezone used for R2 timestamps (e.g. Europe/Zagreb)
 """
 
 import os
@@ -23,18 +23,7 @@ from zoneinfo import ZoneInfo
 import boto3
 import yaml
 
-try:
-    from .ffmpeg_binary import verified_stream_ffmpeg_exe
-except ImportError:  # Support direct execution: python scripts/capture.py
-    from ffmpeg_binary import verified_stream_ffmpeg_exe
-
-
 CONFIG_PATH = Path(__file__).parent.parent / "config.yml"
-
-DAY_MAP = {
-    "Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3,
-    "Fri": 4, "Sat": 5, "Sun": 6,
-}
 
 
 def load_config() -> dict:
@@ -42,26 +31,8 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def is_work_time(cfg: dict) -> bool:
-    tz = ZoneInfo(cfg["schedule"]["timezone"])
-    now = datetime.now(tz)
-    weekday = now.weekday()
-
-    work_days = {DAY_MAP[d] for d in cfg["schedule"]["work_days"]}
-    if weekday not in work_days:
-        return False
-
-    start_h, start_m = map(int, cfg["schedule"]["work_hours"]["start"].split(":"))
-    end_h, end_m = map(int, cfg["schedule"]["work_hours"]["end"].split(":"))
-    minute_of_day = now.hour * 60 + now.minute
-    start = start_h * 60 + start_m
-    end = end_h * 60 + end_m
-
-    return start <= minute_of_day <= end
-
-
 def capture_frame(stream_url: str, output_path: str, quality: int, timeout: int) -> None:
-    executable = verified_stream_ffmpeg_exe()
+    executable = "ffmpeg"
     cmd = [
         executable,
         "-y",
@@ -74,6 +45,9 @@ def capture_frame(stream_url: str, output_path: str, quality: int, timeout: int)
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
+    except FileNotFoundError:
+        print("[ERROR] ffmpeg is not installed or not available on PATH", file=sys.stderr)
+        sys.exit(1)
     except subprocess.TimeoutExpired:
         print(
             f"[ERROR] ffmpeg timed out after {timeout + 10} seconds "
@@ -119,26 +93,23 @@ def upload_to_r2(local_path: str, bucket: str, key: str,
 
 
 def main() -> None:
-    force = "--force" in sys.argv or os.environ.get("CAPTURE_FORCE") == "true"
-
     cfg = load_config()
 
-    if not force and not is_work_time(cfg):
-        tz = ZoneInfo(cfg["schedule"]["timezone"])
-        now = datetime.now(tz)
-        print(f"[SKIP] Outside work hours: {now.strftime('%A %Y-%m-%d %H:%M')} {cfg['schedule']['timezone']}")
-        sys.exit(0)
-
-    if force:
-        print("[INFO] --force flag set, bypassing work-hours checks.")
-
-    required_env = ["STREAM_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_ENDPOINT"]
+    required_env = [
+        "STREAM_URL",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_BUCKET_NAME",
+        "R2_ENDPOINT",
+        "CAPTURE_TIME_ZONE",
+    ]
     missing = [k for k in required_env if not os.environ.get(k)]
     if missing:
         print(f"[ERROR] Missing environment variables: {', '.join(missing)}", file=sys.stderr)
         sys.exit(1)
 
-    tz = ZoneInfo(cfg["schedule"]["timezone"])
+    timezone_name = os.environ["CAPTURE_TIME_ZONE"]
+    tz = ZoneInfo(timezone_name)
     now = datetime.now(tz)
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H-%M-%S")
@@ -147,7 +118,7 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         frame_path = os.path.join(tmpdir, "frame.jpg")
-        print(f"[INFO] Capturing frame at {now.strftime('%Y-%m-%d %H:%M:%S')} {cfg['schedule']['timezone']}")
+        print(f"[INFO] Capturing frame at {now.strftime('%Y-%m-%d %H:%M:%S')} {timezone_name}")
         capture_frame(
             stream_url=os.environ["STREAM_URL"],
             output_path=frame_path,

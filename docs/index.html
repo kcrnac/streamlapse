@@ -716,9 +716,9 @@
           <p>
             streamlapse is a serverless pipeline built on GitHub and Cloudflare.
             A <strong>Cloudflare Worker Cron Trigger</strong> runs at 00, 15, 30,
-            and 45 minutes past each hour from Monday through Saturday. It reads
-            <code>config.yml</code> from the configured repository and dispatches
-            the GitHub Actions capture workflow only during eligible local times.
+            and 45 minutes past each hour from Monday through Saturday. It uses
+            the schedule in <code>wrangler.jsonc</code> and dispatches the GitHub
+            Actions capture workflow only during eligible Zagreb-local times.
             <strong>ffmpeg</strong> then pulls one JPEG frame from the HLS stream
             and uploads it to <strong>Cloudflare R2</strong>. Timelapse generation
             is a separate on-demand workflow that downloads a selected date
@@ -730,8 +730,8 @@
               <div class="fc-icon">📅</div>
               <h4>Configurable schedule</h4>
               <p>
-                Set days, hours, and timezone in <code>config.yml</code>; the
-                fixed 15-minute cadence lives in the Worker configuration.
+                Set days, hours, timezone, and the 15-minute cadence in the
+                Worker configuration; no repository config download is needed.
               </p>
             </div>
             <div class="feature-card">
@@ -986,24 +986,22 @@
 
           <h3 id="schedule">5. Configure the schedule</h3>
           <p>
-            Edit <code>config.yml</code> to match your timezone, active days,
-            and hours. The Worker reads it before every decision. Its Cron
-            Trigger supplies the fixed 15-minute cadence and an outer
-            Monday-through-Saturday guard, so keep that guard aligned if you
-            intentionally enable Sunday.
+            Edit <code>cloudflare/scheduler/wrangler.jsonc</code>. The Cron
+            expression supplies the Monday-through-Saturday, 15-minute cadence;
+            the variables define the local timezone and active hours. Cloudflare
+            Cron uses UTC, so the Worker performs the small local-time check to
+            stay correct across Zagreb daylight-saving changes.
           </p>
           <div class="code-block">
-            <div class="code-block__header">config.yml</div>
-            <pre><code>schedule:
-  timezone: 'Europe/Zagreb'          # any IANA timezone
-  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
-  work_hours:
-    start: '06:30'
-    end: '18:00'
-
-capture:
-  jpeg_quality: 3
-  ffmpeg_timeout: 30</code></pre>
+            <div class="code-block__header">cloudflare/scheduler/wrangler.jsonc</div>
+            <pre><code>"vars": {
+  "SCHEDULE_TIME_ZONE": "Europe/Zagreb",
+  "SCHEDULE_START": "06:30",
+  "SCHEDULE_END": "18:00"
+},
+"triggers": {
+  "crons": ["*/15 * * * MON-SAT"]
+}</code></pre>
           </div>
 
           <h3 id="deploy">6. Deploy the Cloudflare scheduler</h3>
@@ -1033,11 +1031,10 @@ pnpm deploy</code></pre>
 
           <h3 id="verify">7. Push and verify</h3>
           <p>
-            After pushing go to
-            <strong>Actions → Capture Frame → Run workflow</strong>. Outside
-            configured work hours the run exits with <code>[SKIP]</code> — that
-            is expected. Set the <code>force</code> dispatch input to
-            <code>true</code> to bypass all checks for a quick test.
+            After pushing, go to
+            <strong>Actions → Capture Frame → Run workflow</strong>. Manual runs
+            always capture. The optional timezone input controls the R2 timestamp
+            and defaults to <code>Europe/Zagreb</code>.
           </p>
         </section>
 
@@ -1095,19 +1092,12 @@ pnpm deploy</code></pre>
           <h2>Configuration reference</h2>
           <p>
             Capture and media settings live in <code>config.yml</code> at the
-            repository root. Worker cadence and repository targeting live in
-            <code>cloudflare/scheduler/wrangler.jsonc</code>.
+            repository root. The complete automatic schedule and repository
+            targeting live in <code>cloudflare/scheduler/wrangler.jsonc</code>.
           </p>
           <div class="code-block">
             <div class="code-block__header">config.yml — full reference</div>
-            <pre><code>schedule:
-  timezone: 'Europe/Zagreb'          # IANA timezone for work_days/work_hours checks
-  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
-  work_hours:
-    start: '06:30'
-    end: '18:00'
-
-capture:
+            <pre><code>capture:
   jpeg_quality: 3       # ffmpeg -q:v: 1 (best) – 31 (worst); 2–4 is a good range
   ffmpeg_timeout: 30    # seconds before giving up on the stream
 
@@ -1130,19 +1120,19 @@ generate:
               </thead>
               <tbody>
                 <tr>
-                  <td><code>schedule.timezone</code></td>
+                  <td><code>SCHEDULE_TIME_ZONE</code></td>
                   <td><code>Europe/Zagreb</code></td>
-                  <td>Any valid IANA timezone string</td>
+                  <td>IANA timezone in <code>wrangler.jsonc</code></td>
                 </tr>
                 <tr>
-                  <td><code>schedule.work_days</code></td>
+                  <td><code>triggers.crons</code></td>
                   <td>Mon–Sat</td>
-                  <td>Days on which captures are allowed</td>
+                  <td>UTC weekday guard and 15-minute cadence</td>
                 </tr>
                 <tr>
-                  <td><code>schedule.work_hours</code></td>
+                  <td><code>SCHEDULE_START/END</code></td>
                   <td>06:30–18:00</td>
-                  <td>Time window in the configured timezone</td>
+                  <td>Inclusive local-time window in <code>wrangler.jsonc</code></td>
                 </tr>
                 <tr>
                   <td><code>capture.jpeg_quality</code></td>
@@ -1189,9 +1179,10 @@ export R2_ACCESS_KEY_ID=your_access_key_id
 export R2_SECRET_ACCESS_KEY=your_secret_access_key
 export R2_BUCKET_NAME=my-streamlapse
 export R2_ENDPOINT=https://&lt;account_id&gt;.eu.r2.cloudflarestorage.com
+export CAPTURE_TIME_ZONE=Europe/Zagreb
 
-# Test capture (--force bypasses work-day and work-hour checks)
-python scripts/capture.py --force
+# Test capture (requires ffmpeg on PATH)
+python scripts/capture.py
 
 # Generate timelapse for a date range
 python scripts/generate.py --date-from 2026-04-01 --date-to 2026-04-07 --fps 12</code></pre>

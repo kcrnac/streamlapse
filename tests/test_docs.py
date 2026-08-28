@@ -42,6 +42,10 @@ class DocumentationTests(unittest.TestCase):
             r"interval_minutes",
             r"07:00",
             r"17:00",
+            r"reads (?:the )?(?:current )?schedule from `?config\.yml",
+            r"force=true",
+            r"--force",
+            r"imageio-ffmpeg",
         )
         for pattern in stale_patterns:
             with self.subTest(pattern=pattern):

@@ -2,34 +2,29 @@ import { describe, expect, it, vi } from "vitest";
 import {
   dispatchCapture,
   getGitHubRepository,
+  getScheduleConfig,
   getScheduleDecision,
   GitHubDispatchError,
   handleScheduled,
-  loadScheduleConfig,
-  parseScheduleConfig,
 } from "../src/index";
 
-const CONFIG_YAML = `
-schedule:
-  timezone: Europe/Zagreb
-  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
-  work_hours:
-    start: '06:30'
-    end: '18:00'
-`;
-
-const SCHEDULE = parseScheduleConfig(CONFIG_YAML);
 const REPOSITORY = {
   owner: "kcrnac",
   repo: "streamlapse",
   ref: "main",
 } as const;
+
 const WORKER_ENV: Env = {
   GITHUB_TOKEN: "test-token",
   GITHUB_OWNER: REPOSITORY.owner,
   GITHUB_REPO: REPOSITORY.repo,
   GITHUB_REF: REPOSITORY.ref,
+  SCHEDULE_TIME_ZONE: "Europe/Zagreb",
+  SCHEDULE_START: "06:30",
+  SCHEDULE_END: "18:00",
 };
+
+const SCHEDULE = getScheduleConfig(WORKER_ENV);
 
 function zagrebInstant(localIso: string, utcOffset: "+01:00" | "+02:00"): number {
   return Date.parse(`${localIso}${utcOffset}`);
@@ -43,73 +38,49 @@ function scheduledController(scheduledTime: number) {
   } satisfies ScheduledController;
 }
 
-function schedulerFetcher(dispatchStatus = 204) {
-  return vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
-    if (String(input).includes("raw.githubusercontent.com")) {
-      return new Response(CONFIG_YAML, { status: 200 });
-    }
-    return new Response(null, { status: dispatchStatus });
-  });
-}
-
-describe("schedule config", () => {
-  it("parses the repository schedule", () => {
-    expect(SCHEDULE).toMatchObject({
+describe("Wrangler schedule variables", () => {
+  it("reads and validates the schedule", () => {
+    expect(SCHEDULE).toEqual({
       timeZone: "Europe/Zagreb",
       startMinute: 390,
       endMinute: 1080,
     });
-    expect(SCHEDULE.workDays).not.toContain("Sun");
   });
 
-  it("fails visibly when config.yml cannot be loaded", async () => {
-    const fetcher = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(null, { status: 503 }),
+  it("rejects invalid clocks and overnight windows", () => {
+    expect(() => getScheduleConfig({ ...WORKER_ENV, SCHEDULE_START: "6:30" })).toThrow(
+      "SCHEDULE_START must use 24-hour HH:MM format",
     );
-
-    await expect(loadScheduleConfig(REPOSITORY, fetcher as typeof fetch)).rejects.toThrow(
-      "Could not load config.yml: HTTP 503",
+    expect(() => getScheduleConfig({ ...WORKER_ENV, SCHEDULE_START: "19:00" })).toThrow(
+      "Overnight capture windows are not supported",
     );
   });
 });
 
-describe("Europe/Zagreb schedule", () => {
+describe("Europe/Zagreb capture window", () => {
   it.each([
-    ["Monday 06:29", "2026-01-05T06:29:00", "+01:00", false, "outside-window"],
-    ["Monday 06:30", "2026-01-05T06:30:00", "+01:00", true, "eligible"],
-    ["Monday 06:45", "2026-01-05T06:45:00", "+01:00", true, "eligible"],
-    ["Sunday 12:00", "2026-01-11T12:00:00", "+01:00", false, "outside-work-days"],
-    ["Monday 18:00", "2026-01-05T18:00:00", "+01:00", true, "eligible"],
-    ["Monday 18:01", "2026-01-05T18:01:00", "+01:00", false, "outside-window"],
-  ] as const)("handles %s", (_name, localIso, offset, expected, reason) => {
+    ["06:29", "2026-01-05T06:29:00", "+01:00", false],
+    ["06:30", "2026-01-05T06:30:00", "+01:00", true],
+    ["06:45", "2026-01-05T06:45:00", "+01:00", true],
+    ["18:00", "2026-01-05T18:00:00", "+01:00", true],
+    ["18:01", "2026-01-05T18:01:00", "+01:00", false],
+  ] as const)("handles %s", (_name, localIso, offset, expected) => {
     expect(getScheduleDecision(zagrebInstant(localIso, offset), SCHEDULE)).toMatchObject({
       shouldDispatch: expected,
-      reason,
     });
   });
 
-  it("honors excluded work days from config.yml", () => {
-    const weekdaysOnly = parseScheduleConfig(
-      CONFIG_YAML.replace("Fri, Sat", "Fri"),
-    );
-
-    expect(
-      getScheduleDecision(zagrebInstant("2026-01-11T12:00:00", "+01:00"), weekdaysOnly),
-    ).toMatchObject({ shouldDispatch: false, reason: "outside-work-days" });
-  });
-
   it("uses CEST after the spring DST transition", () => {
-    expect(getScheduleDecision(Date.parse("2026-03-30T04:30:00Z"), SCHEDULE)).toMatchObject({
+    expect(getScheduleDecision(Date.parse("2026-03-30T04:30:00Z"), SCHEDULE)).toEqual({
       shouldDispatch: true,
-      localTime: "Mon 06:30",
+      localTime: "06:30",
     });
   });
 
   it("uses CET after the autumn DST transition", () => {
-    expect(getScheduleDecision(Date.parse("2026-10-26T05:30:00Z"), SCHEDULE)).toMatchObject({
+    expect(getScheduleDecision(Date.parse("2026-10-26T05:30:00Z"), SCHEDULE)).toEqual({
       shouldDispatch: true,
-      localTime: "Mon 06:30",
+      localTime: "06:30",
     });
   });
 });
@@ -119,13 +90,18 @@ describe("GitHub workflow dispatch", () => {
     expect(getGitHubRepository(WORKER_ENV)).toEqual(REPOSITORY);
   });
 
-  it("dispatches capture.yml on main with force=true", async () => {
+  it("dispatches capture.yml with the configured timezone", async () => {
     const fetcher = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>
         new Response(null, { status: 204 }),
     );
 
-    await dispatchCapture("test-token", REPOSITORY, fetcher as typeof fetch);
+    await dispatchCapture(
+      "test-token",
+      REPOSITORY,
+      "Europe/Zagreb",
+      fetcher as typeof fetch,
+    );
 
     expect(fetcher).toHaveBeenCalledOnce();
     const [url, init] = fetcher.mock.calls[0];
@@ -135,35 +111,33 @@ describe("GitHub workflow dispatch", () => {
     expect(init?.method).toBe("POST");
     expect(JSON.parse(String(init?.body))).toEqual({
       ref: "main",
-      inputs: { force: "true" },
+      inputs: { timezone: "Europe/Zagreb" },
     });
     expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer test-token");
   });
 
-  it("loads config.yml before dispatching an eligible capture", async () => {
-    const fetcher = schedulerFetcher();
-    const controller = scheduledController(zagrebInstant("2026-01-05T06:30:00", "+01:00"));
-
-    await expect(
-      handleScheduled(controller, WORKER_ENV, fetcher as typeof fetch),
-    ).resolves.toBe("dispatched");
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(String(fetcher.mock.calls[0][0])).toContain("config.yml");
-    expect(String(fetcher.mock.calls[1][0])).toContain("capture.yml/dispatches");
-  });
-
-  it("does not call GitHub dispatch outside the configured schedule", async () => {
-    const fetcher = schedulerFetcher();
+  it("does not make a network request outside the configured window", async () => {
+    const fetcher = vi.fn();
     const controller = scheduledController(zagrebInstant("2026-01-05T18:15:00", "+01:00"));
 
     await expect(
       handleScheduled(controller, WORKER_ENV, fetcher as typeof fetch),
     ).resolves.toBe("skipped");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("dispatches with one network request inside the configured window", async () => {
+    const fetcher = vi.fn(async () => new Response(null, { status: 204 }));
+    const controller = scheduledController(zagrebInstant("2026-01-05T06:30:00", "+01:00"));
+
+    await expect(
+      handleScheduled(controller, WORKER_ENV, fetcher as typeof fetch),
+    ).resolves.toBe("dispatched");
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it("disables retries for a permanent GitHub client error", async () => {
-    const fetcher = schedulerFetcher(401);
+    const fetcher = vi.fn(async () => new Response(null, { status: 401 }));
     const controller = scheduledController(zagrebInstant("2026-01-05T06:30:00", "+01:00"));
 
     await expect(

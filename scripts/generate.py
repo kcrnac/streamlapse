@@ -27,12 +27,6 @@ from pathlib import Path
 import boto3
 import yaml
 
-try:
-    from .ffmpeg_binary import verified_ffmpeg_exe
-except ImportError:  # Support direct execution: python scripts/generate.py
-    from ffmpeg_binary import verified_ffmpeg_exe
-
-
 CONFIG_PATH = Path(__file__).parent.parent / "config.yml"
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 OUTPUT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.mp4$", re.IGNORECASE)
@@ -117,7 +111,7 @@ def download_frames(client, bucket: str, keys: list[str], dest_dir: str) -> list
 
 def build_timelapse(frames_dir: str, output_path: str, fps: int, scale: str) -> None:
     cmd = [
-        verified_ffmpeg_exe(),
+        "ffmpeg",
         "-y",
         "-loglevel", "error",
         "-framerate", str(fps),
