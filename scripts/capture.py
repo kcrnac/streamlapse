@@ -51,9 +51,8 @@ def is_work_time(cfg: dict) -> bool:
     minute_of_day = now.hour * 60 + now.minute
     start = start_h * 60 + start_m
     end = end_h * 60 + end_m
-    interval = cfg["schedule"]["interval_minutes"]
 
-    return start <= minute_of_day <= end and (minute_of_day - start) % interval == 0
+    return start <= minute_of_day <= end
 
 
 def capture_frame(stream_url: str, output_path: str, quality: int, timeout: int) -> None:
@@ -108,7 +107,7 @@ def main() -> None:
         sys.exit(0)
 
     if force:
-        print("[INFO] --force flag set, bypassing work-hours and interval checks.")
+        print("[INFO] --force flag set, bypassing work-hours checks.")
 
     required_env = ["STREAM_URL", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_ENDPOINT"]
     missing = [k for k in required_env if not os.environ.get(k)]

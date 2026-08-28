@@ -18,6 +18,6 @@
     "required": ["GITHUB_TOKEN"]
   },
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["*/15 * * * *"]
   }
 }

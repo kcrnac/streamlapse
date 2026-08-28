@@ -12,13 +12,12 @@ export type ScheduleConfig = {
   workDays: ReadonlySet<string>;
   startMinute: number;
   endMinute: number;
-  intervalMinutes: number;
 };
 
 export type ScheduleDecision = {
   shouldDispatch: boolean;
   localTime: string;
-  reason: "eligible" | "outside-work-days" | "outside-window" | "off-interval";
+  reason: "eligible" | "outside-work-days" | "outside-window";
 };
 
 export class GitHubDispatchError extends Error {
@@ -50,7 +49,6 @@ export function parseScheduleConfig(source: string): ScheduleConfig {
       timezone?: unknown;
       work_days?: unknown;
       work_hours?: { start?: unknown; end?: unknown };
-      interval_minutes?: unknown;
     };
   };
   const schedule = document?.schedule;
@@ -80,31 +78,12 @@ export function parseScheduleConfig(source: string): ScheduleConfig {
   if (endMinute < startMinute) {
     throw new ScheduleConfigError("Overnight capture windows are not supported");
   }
-  if (startMinute % 5 !== 0) {
-    throw new ScheduleConfigError(
-      "schedule.work_hours.start must align with the five-minute Worker heartbeat",
-    );
-  }
-
-  const intervalMinutes = schedule.interval_minutes;
-  if (
-    typeof intervalMinutes !== "number" ||
-    !Number.isInteger(intervalMinutes) ||
-    intervalMinutes < 5 ||
-    intervalMinutes > 60 ||
-    intervalMinutes % 5 !== 0
-  ) {
-    throw new ScheduleConfigError(
-      "schedule.interval_minutes must be a whole multiple of 5 between 5 and 60",
-    );
-  }
 
   return {
     timeZone: schedule.timezone,
     workDays: new Set(schedule.work_days),
     startMinute,
     endMinute,
-    intervalMinutes,
   };
 }
 
@@ -182,10 +161,6 @@ export function getScheduleDecision(
     return { shouldDispatch: false, localTime, reason: "outside-window" };
   }
 
-  if ((minuteOfDay - schedule.startMinute) % schedule.intervalMinutes !== 0) {
-    return { shouldDispatch: false, localTime, reason: "off-interval" };
-  }
-
   return { shouldDispatch: true, localTime, reason: "eligible" };
 }
 
@@ -225,7 +200,6 @@ export async function handleScheduled(
     cron: controller.cron,
     scheduledTime: controller.scheduledTime,
     timeZone: schedule.timeZone,
-    intervalMinutes: schedule.intervalMinutes,
     ...decision,
   });
 

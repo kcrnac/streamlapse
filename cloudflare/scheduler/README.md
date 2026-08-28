@@ -1,14 +1,15 @@
 # Streamlapse Cloudflare scheduler
 
 This Worker is the external scheduler for `.github/workflows/capture.yml`.
-Cloudflare wakes it every five minutes. On every wake-up, the Worker reads the
-`schedule` section of the root `config.yml` from `main`, evaluates the scheduled
-instant in the configured timezone, and dispatches the capture workflow only
-when the configured day, time window, and interval are eligible.
+Cloudflare invokes it every 15 minutes (`00`, `15`, `30`, and `45` past each
+hour). On every invocation, the Worker reads the `schedule` section of the root
+`config.yml` from `main`, evaluates the scheduled instant in the configured
+timezone, and dispatches the capture workflow only when the configured day and
+time window are eligible.
 
 The dispatch sends `force=true` because Cloudflare has already evaluated the
 shared configuration. Manual workflow runs can leave `force=false` to apply the
-same `config.yml` checks inside `capture.py`.
+same day and work-hours checks inside `capture.py`.
 
 ## Local validation
 

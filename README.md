@@ -33,7 +33,10 @@ Cloudflare R2  videos/timelapse_<from>_to_<to>.mp4
 | **`scripts/capture.py`**             | Validates non-forced runs, grabs one JPEG with `ffmpeg`, uploads to R2 |
 | **`scripts/generate.py`**            | Downloads frames from R2, assembles an MP4, uploads it back to R2      |
 
-`config.yml` is the single source of truth for the capture timezone, work days, active window, and interval. The current schedule is every 15 minutes, every day, from 06:30 through 17:30 in `Europe/Zagreb`.
+`config.yml` is the single source of truth for the capture timezone, work days,
+and active window. Cloudflare is the only automatic scheduler and invokes the
+Worker every 15 minutes. The current schedule is every day from 06:00 through
+18:00 in `Europe/Zagreb`.
 
 ---
 
@@ -97,13 +100,15 @@ Edit [`config.yml`](config.yml) to match your stream's timezone and active hours
 schedule:
   timezone: 'Europe/Zagreb' # any IANA timezone
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
-  interval_minutes: 15 # a multiple of 5, from 5 through 60
   work_hours:
-    start: '06:30' # must align to a five-minute boundary
-    end: '17:30'
+    start: '06:00'
+    end: '18:00'
 ```
 
-The Cloudflare Worker reads this file directly from `main` before every scheduling decision, so schedule changes do not need to be duplicated in Worker code. Frames are captured only at eligible times.
+The Cloudflare Worker reads this file directly from `main` before every
+scheduling decision, so the timezone, days, and work hours are not duplicated
+in Worker code. The 15-minute cadence is defined once by the Cloudflare Cron
+Trigger in `cloudflare/scheduler/wrangler.jsonc`.
 
 ### 6. Deploy the Cloudflare scheduler
 
@@ -118,7 +123,10 @@ pnpm wrangler secret put GITHUB_TOKEN
 pnpm deploy
 ```
 
-The Worker wakes every five minutes, reads the current schedule from `config.yml`, and calls the Capture Frame workflow only when a capture is due. The GitHub workflow intentionally has no `schedule` trigger; `workflow_dispatch` is its only entry point.
+Cloudflare invokes the Worker at `00`, `15`, `30`, and `45` past every hour. The
+Worker reads the current schedule from `config.yml` and calls the Capture Frame
+workflow only inside the configured window. The GitHub workflow intentionally
+has no `schedule` trigger; `workflow_dispatch` is its only entry point.
 
 ### 7. Push and verify
 
@@ -172,10 +180,9 @@ All tuneable settings live in [`config.yml`](config.yml):
 schedule:
   timezone: 'Europe/Zagreb' # IANA timezone string
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
-  interval_minutes: 15 # whole multiple of 5, between 5 and 60
   work_hours:
-    start: '06:30' # must align to a five-minute boundary
-    end: '17:30'
+    start: '06:00'
+    end: '18:00'
 
 capture:
   jpeg_quality: 3 # ffmpeg -q:v: 1 (best) – 31 (worst); 2–4 is a good range

@@ -6,17 +6,15 @@ import {
   handleScheduled,
   loadScheduleConfig,
   parseScheduleConfig,
-  ScheduleConfigError,
 } from "../src/index";
 
 const CONFIG_YAML = `
 schedule:
   timezone: Europe/Zagreb
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
-  interval_minutes: 15
   work_hours:
-    start: '06:30'
-    end: '17:30'
+    start: '06:00'
+    end: '18:00'
 `;
 
 const SCHEDULE = parseScheduleConfig(CONFIG_YAML);
@@ -28,7 +26,7 @@ function zagrebInstant(localIso: string, utcOffset: "+01:00" | "+02:00"): number
 function scheduledController(scheduledTime: number) {
   return {
     scheduledTime,
-    cron: "*/5 * * * *",
+    cron: "*/15 * * * *",
     noRetry: vi.fn(),
   } satisfies ScheduledController;
 }
@@ -46,23 +44,10 @@ describe("schedule config", () => {
   it("parses the repository schedule", () => {
     expect(SCHEDULE).toMatchObject({
       timeZone: "Europe/Zagreb",
-      startMinute: 390,
-      endMinute: 1050,
-      intervalMinutes: 15,
+      startMinute: 360,
+      endMinute: 1080,
     });
     expect(SCHEDULE.workDays).toContain("Sun");
-  });
-
-  it("rejects intervals that the five-minute heartbeat cannot represent", () => {
-    expect(() =>
-      parseScheduleConfig(CONFIG_YAML.replace("interval_minutes: 15", "interval_minutes: 7")),
-    ).toThrow(ScheduleConfigError);
-  });
-
-  it("rejects start times that do not align with the five-minute heartbeat", () => {
-    expect(() =>
-      parseScheduleConfig(CONFIG_YAML.replace("start: '06:30'", "start: '06:32'")),
-    ).toThrow("must align with the five-minute Worker heartbeat");
   });
 
   it("fails visibly when config.yml cannot be loaded", async () => {
@@ -79,13 +64,12 @@ describe("schedule config", () => {
 
 describe("Europe/Zagreb schedule", () => {
   it.each([
-    ["Monday 06:29", "2026-01-05T06:29:00", "+01:00", false, "outside-window"],
-    ["Monday 06:30", "2026-01-05T06:30:00", "+01:00", true, "eligible"],
-    ["Monday 06:35", "2026-01-05T06:35:00", "+01:00", false, "off-interval"],
-    ["Monday 06:45", "2026-01-05T06:45:00", "+01:00", true, "eligible"],
+    ["Monday 05:59", "2026-01-05T05:59:00", "+01:00", false, "outside-window"],
+    ["Monday 06:00", "2026-01-05T06:00:00", "+01:00", true, "eligible"],
+    ["Monday 06:15", "2026-01-05T06:15:00", "+01:00", true, "eligible"],
     ["Sunday 12:00", "2026-01-11T12:00:00", "+01:00", true, "eligible"],
-    ["Monday 17:30", "2026-01-05T17:30:00", "+01:00", true, "eligible"],
-    ["Monday 17:31", "2026-01-05T17:31:00", "+01:00", false, "outside-window"],
+    ["Monday 18:00", "2026-01-05T18:00:00", "+01:00", true, "eligible"],
+    ["Monday 18:01", "2026-01-05T18:01:00", "+01:00", false, "outside-window"],
   ] as const)("handles %s", (_name, localIso, offset, expected, reason) => {
     expect(getScheduleDecision(zagrebInstant(localIso, offset), SCHEDULE)).toMatchObject({
       shouldDispatch: expected,
@@ -104,16 +88,16 @@ describe("Europe/Zagreb schedule", () => {
   });
 
   it("uses CEST after the spring DST transition", () => {
-    expect(getScheduleDecision(Date.parse("2026-03-30T04:30:00Z"), SCHEDULE)).toMatchObject({
+    expect(getScheduleDecision(Date.parse("2026-03-30T04:00:00Z"), SCHEDULE)).toMatchObject({
       shouldDispatch: true,
-      localTime: "Mon 06:30",
+      localTime: "Mon 06:00",
     });
   });
 
   it("uses CET after the autumn DST transition", () => {
-    expect(getScheduleDecision(Date.parse("2026-10-26T05:30:00Z"), SCHEDULE)).toMatchObject({
+    expect(getScheduleDecision(Date.parse("2026-10-26T05:00:00Z"), SCHEDULE)).toMatchObject({
       shouldDispatch: true,
-      localTime: "Mon 06:30",
+      localTime: "Mon 06:00",
     });
   });
 });
@@ -142,7 +126,7 @@ describe("GitHub workflow dispatch", () => {
 
   it("loads config.yml before dispatching an eligible capture", async () => {
     const fetcher = schedulerFetcher();
-    const controller = scheduledController(zagrebInstant("2026-01-05T06:30:00", "+01:00"));
+    const controller = scheduledController(zagrebInstant("2026-01-05T06:00:00", "+01:00"));
 
     await expect(
       handleScheduled(controller, { GITHUB_TOKEN: "test-token" }, fetcher as typeof fetch),
@@ -154,7 +138,7 @@ describe("GitHub workflow dispatch", () => {
 
   it("does not call GitHub dispatch outside the configured schedule", async () => {
     const fetcher = schedulerFetcher();
-    const controller = scheduledController(zagrebInstant("2026-01-05T18:00:00", "+01:00"));
+    const controller = scheduledController(zagrebInstant("2026-01-05T18:15:00", "+01:00"));
 
     await expect(
       handleScheduled(controller, { GITHUB_TOKEN: "test-token" }, fetcher as typeof fetch),
@@ -164,7 +148,7 @@ describe("GitHub workflow dispatch", () => {
 
   it("disables retries for a permanent GitHub client error", async () => {
     const fetcher = schedulerFetcher(401);
-    const controller = scheduledController(zagrebInstant("2026-01-05T06:30:00", "+01:00"));
+    const controller = scheduledController(zagrebInstant("2026-01-05T06:00:00", "+01:00"));
 
     await expect(
       handleScheduled(controller, { GITHUB_TOKEN: "test-token" }, fetcher as typeof fetch),
