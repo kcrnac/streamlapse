@@ -1,5 +1,8 @@
 # streamlapse
 
+[![Capture Frame](https://github.com/kcrnac/streamlapse/actions/workflows/capture.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/kcrnac/streamlapse/actions/workflows/capture.yml)
+[![Deploy Cloudflare Scheduler](https://github.com/kcrnac/streamlapse/actions/workflows/deploy-cloudflare-scheduler.yml/badge.svg?branch=main&event=push)](https://github.com/kcrnac/streamlapse/actions/workflows/deploy-cloudflare-scheduler.yml)
+
 **streamlapse** automatically captures a JPEG frame from any public HLS stream every 15 minutes (during configurable work hours), stores the frames in Cloudflare R2, and lets you assemble a date range into an MP4 timelapse on demand — with no servers to manage and free tiers that cover modest usage.
 
 Scheduling runs on a **Cloudflare Worker Cron Trigger**, capture and video jobs run on **GitHub Actions**, and media is stored in **Cloudflare R2**. Public repositories can use standard GitHub-hosted runners without minute charges, and R2 includes a free allowance plus free Internet egress; usage above the applicable allowances can still be billed.
