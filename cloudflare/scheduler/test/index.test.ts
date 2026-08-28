@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   dispatchCapture,
+  getGitHubRepository,
   getScheduleDecision,
   GitHubDispatchError,
   handleScheduled,
@@ -18,6 +19,17 @@ schedule:
 `;
 
 const SCHEDULE = parseScheduleConfig(CONFIG_YAML);
+const REPOSITORY = {
+  owner: "kcrnac",
+  repo: "streamlapse",
+  ref: "main",
+} as const;
+const WORKER_ENV: Env = {
+  GITHUB_TOKEN: "test-token",
+  GITHUB_OWNER: REPOSITORY.owner,
+  GITHUB_REPO: REPOSITORY.repo,
+  GITHUB_REF: REPOSITORY.ref,
+};
 
 function zagrebInstant(localIso: string, utcOffset: "+01:00" | "+02:00"): number {
   return Date.parse(`${localIso}${utcOffset}`);
@@ -56,7 +68,7 @@ describe("schedule config", () => {
         new Response(null, { status: 503 }),
     );
 
-    await expect(loadScheduleConfig(fetcher as typeof fetch)).rejects.toThrow(
+    await expect(loadScheduleConfig(REPOSITORY, fetcher as typeof fetch)).rejects.toThrow(
       "Could not load config.yml: HTTP 503",
     );
   });
@@ -103,13 +115,17 @@ describe("Europe/Zagreb schedule", () => {
 });
 
 describe("GitHub workflow dispatch", () => {
+  it("reads repository targeting from Worker variables", () => {
+    expect(getGitHubRepository(WORKER_ENV)).toEqual(REPOSITORY);
+  });
+
   it("dispatches capture.yml on main with force=true", async () => {
     const fetcher = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>
         new Response(null, { status: 204 }),
     );
 
-    await dispatchCapture("test-token", fetcher as typeof fetch);
+    await dispatchCapture("test-token", REPOSITORY, fetcher as typeof fetch);
 
     expect(fetcher).toHaveBeenCalledOnce();
     const [url, init] = fetcher.mock.calls[0];
@@ -129,7 +145,7 @@ describe("GitHub workflow dispatch", () => {
     const controller = scheduledController(zagrebInstant("2026-01-05T06:30:00", "+01:00"));
 
     await expect(
-      handleScheduled(controller, { GITHUB_TOKEN: "test-token" }, fetcher as typeof fetch),
+      handleScheduled(controller, WORKER_ENV, fetcher as typeof fetch),
     ).resolves.toBe("dispatched");
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(fetcher.mock.calls[0][0])).toContain("config.yml");
@@ -141,7 +157,7 @@ describe("GitHub workflow dispatch", () => {
     const controller = scheduledController(zagrebInstant("2026-01-05T18:15:00", "+01:00"));
 
     await expect(
-      handleScheduled(controller, { GITHUB_TOKEN: "test-token" }, fetcher as typeof fetch),
+      handleScheduled(controller, WORKER_ENV, fetcher as typeof fetch),
     ).resolves.toBe("skipped");
     expect(fetcher).toHaveBeenCalledOnce();
   });
@@ -151,7 +167,7 @@ describe("GitHub workflow dispatch", () => {
     const controller = scheduledController(zagrebInstant("2026-01-05T06:30:00", "+01:00"));
 
     await expect(
-      handleScheduled(controller, { GITHUB_TOKEN: "test-token" }, fetcher as typeof fetch),
+      handleScheduled(controller, WORKER_ENV, fetcher as typeof fetch),
     ).rejects.toBeInstanceOf(GitHubDispatchError);
     expect(controller.noRetry).toHaveBeenCalledOnce();
   });

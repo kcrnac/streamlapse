@@ -1,4 +1,6 @@
 .codex/
+__pycache__/
+*.py[cod]
 cloudflare/scheduler/node_modules/
 cloudflare/scheduler/.wrangler/
 cloudflare/scheduler/.dev.vars*

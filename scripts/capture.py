@@ -23,6 +23,11 @@ from zoneinfo import ZoneInfo
 import boto3
 import yaml
 
+try:
+    from .ffmpeg_binary import verified_ffmpeg_exe
+except ImportError:  # Support direct execution: python scripts/capture.py
+    from ffmpeg_binary import verified_ffmpeg_exe
+
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yml"
 
@@ -57,7 +62,7 @@ def is_work_time(cfg: dict) -> bool:
 
 def capture_frame(stream_url: str, output_path: str, quality: int, timeout: int) -> None:
     cmd = [
-        "ffmpeg",
+        verified_ffmpeg_exe(),
         "-y",
         "-loglevel", "error",
         "-timeout", str(timeout * 1_000_000),  # ffmpeg uses microseconds for timeout

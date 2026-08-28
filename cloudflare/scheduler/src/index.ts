@@ -1,11 +1,13 @@
 import { parse } from "yaml";
 
-const CONFIG_URL =
-  "https://raw.githubusercontent.com/kcrnac/streamlapse/main/config.yml";
-const WORKFLOW_DISPATCH_URL =
-  "https://api.github.com/repos/kcrnac/streamlapse/actions/workflows/capture.yml/dispatches";
 const WEEKDAYS = new Set(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 const MAX_CONFIG_BYTES = 64 * 1024;
+
+export type GitHubRepository = {
+  owner: string;
+  repo: string;
+  ref: string;
+};
 
 export type ScheduleConfig = {
   timeZone: string;
@@ -32,6 +34,38 @@ export class ScheduleConfigError extends Error {
     super(message);
     this.name = "ScheduleConfigError";
   }
+}
+
+export class RepositoryConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RepositoryConfigError";
+  }
+}
+
+function requireRepositoryValue(value: string | undefined, field: string): string {
+  if (!value || value.trim() !== value || /[\r\n]/.test(value)) {
+    throw new RepositoryConfigError(`${field} must be a non-empty value without whitespace padding`);
+  }
+  return value;
+}
+
+export function getGitHubRepository(env: Env): GitHubRepository {
+  return {
+    owner: requireRepositoryValue(env.GITHUB_OWNER, "GITHUB_OWNER"),
+    repo: requireRepositoryValue(env.GITHUB_REPO, "GITHUB_REPO"),
+    ref: requireRepositoryValue(env.GITHUB_REF, "GITHUB_REF"),
+  };
+}
+
+function configUrl(repository: GitHubRepository): string {
+  const { owner, repo, ref } = repository;
+  return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(ref)}/config.yml`;
+}
+
+function workflowDispatchUrl(repository: GitHubRepository): string {
+  const { owner, repo } = repository;
+  return `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/capture.yml/dispatches`;
 }
 
 function parseClock(value: unknown, field: string): number {
@@ -114,8 +148,11 @@ async function readConfigText(response: Response): Promise<string> {
   return source + decoder.decode();
 }
 
-export async function loadScheduleConfig(fetcher: typeof fetch = fetch): Promise<ScheduleConfig> {
-  const response = await fetcher(CONFIG_URL, {
+export async function loadScheduleConfig(
+  repository: GitHubRepository,
+  fetcher: typeof fetch = fetch,
+): Promise<ScheduleConfig> {
+  const response = await fetcher(configUrl(repository), {
     headers: {
       Accept: "text/plain",
       "User-Agent": "streamlapse-cloudflare-scheduler",
@@ -166,9 +203,10 @@ export function getScheduleDecision(
 
 export async function dispatchCapture(
   githubToken: string,
+  repository: GitHubRepository,
   fetcher: typeof fetch = fetch,
 ): Promise<void> {
-  const response = await fetcher(WORKFLOW_DISPATCH_URL, {
+  const response = await fetcher(workflowDispatchUrl(repository), {
     method: "POST",
     headers: {
       Accept: "application/vnd.github+json",
@@ -178,7 +216,7 @@ export async function dispatchCapture(
       "X-GitHub-Api-Version": "2026-03-10",
     },
     body: JSON.stringify({
-      ref: "main",
+      ref: repository.ref,
       inputs: { force: "true" },
     }),
   });
@@ -193,15 +231,16 @@ export async function handleScheduled(
   env: Env,
   fetcher: typeof fetch = fetch,
 ): Promise<"dispatched" | "skipped"> {
-  const schedule = await loadScheduleConfig(fetcher);
+  const repository = getGitHubRepository(env);
+  const schedule = await loadScheduleConfig(repository, fetcher);
   const decision = getScheduleDecision(controller.scheduledTime, schedule);
-  console.log({
+  console.log(JSON.stringify({
     event: "schedule-evaluated",
     cron: controller.cron,
     scheduledTime: controller.scheduledTime,
     timeZone: schedule.timeZone,
     ...decision,
-  });
+  }));
 
   if (!decision.shouldDispatch) {
     return "skipped";
@@ -213,16 +252,16 @@ export async function handleScheduled(
   }
 
   try {
-    await dispatchCapture(env.GITHUB_TOKEN, fetcher);
-    console.log({
+    await dispatchCapture(env.GITHUB_TOKEN, repository, fetcher);
+    console.log(JSON.stringify({
       event: "workflow-dispatched",
       scheduledTime: controller.scheduledTime,
       localTime: decision.localTime,
-      repository: "kcrnac/streamlapse",
+      repository: `${repository.owner}/${repository.repo}`,
       workflow: "capture.yml",
-      ref: "main",
+      ref: repository.ref,
       force: true,
-    });
+    }));
     return "dispatched";
   } catch (error) {
     if (
@@ -235,12 +274,12 @@ export async function handleScheduled(
       controller.noRetry();
     }
 
-    console.error({
+    console.error(JSON.stringify({
       event: "workflow-dispatch-failed",
       scheduledTime: controller.scheduledTime,
       localTime: decision.localTime,
       error: error instanceof Error ? error.message : "Unknown error",
-    });
+    }));
     throw error;
   }
 }

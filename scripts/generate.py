@@ -17,6 +17,7 @@ Required environment variables (set as GitHub Secrets):
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -26,8 +27,42 @@ from pathlib import Path
 import boto3
 import yaml
 
+try:
+    from .ffmpeg_binary import verified_ffmpeg_exe
+except ImportError:  # Support direct execution: python scripts/generate.py
+    from ffmpeg_binary import verified_ffmpeg_exe
+
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yml"
+DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+OUTPUT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.mp4$", re.IGNORECASE)
+
+
+def parse_date(value: str) -> date:
+    if not DATE_PATTERN.fullmatch(value):
+        raise argparse.ArgumentTypeError("date must use YYYY-MM-DD format")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def positive_fps(value: str) -> int:
+    try:
+        fps = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("fps must be a positive integer") from error
+    if fps <= 0:
+        raise argparse.ArgumentTypeError("fps must be a positive integer")
+    return fps
+
+
+def output_basename(value: str) -> str:
+    if Path(value).name != value or not OUTPUT_PATTERN.fullmatch(value):
+        raise argparse.ArgumentTypeError(
+            "output must be a simple .mp4 filename using letters, numbers, dot, dash, or underscore",
+        )
+    return value
 
 
 def load_config() -> dict:
@@ -82,7 +117,7 @@ def download_frames(client, bucket: str, keys: list[str], dest_dir: str) -> list
 
 def build_timelapse(frames_dir: str, output_path: str, fps: int, scale: str) -> None:
     cmd = [
-        "ffmpeg",
+        verified_ffmpeg_exe(),
         "-y",
         "-loglevel", "error",
         "-framerate", str(fps),
@@ -112,15 +147,22 @@ def upload_video(client, bucket: str, local_path: str, key: str) -> str:
     return key
 
 
+def publish_github_output(video_path: str) -> None:
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output:
+        with Path(github_output).open("a", encoding="utf-8") as output_file:
+            output_file.write(f"video_path={video_path}\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Assemble HLS stream timelapse MP4")
-    parser.add_argument("--date-from", required=False, default=None,
-                        help="Start date YYYY-MM-DD (default: earliest available)")
-    parser.add_argument("--date-to", required=False, default=None,
+    parser.add_argument("--date-from", type=parse_date, required=False, default=None,
+                        help="Start date YYYY-MM-DD (default: first day of current month)")
+    parser.add_argument("--date-to", type=parse_date, required=False, default=None,
                         help="End date YYYY-MM-DD (default: today)")
-    parser.add_argument("--fps", type=int, default=None,
+    parser.add_argument("--fps", type=positive_fps, default=None,
                         help="Frames per second (default: from config.yml)")
-    parser.add_argument("--output", default=None,
+    parser.add_argument("--output", type=output_basename, default=None,
                         help="Output filename (without path, uploaded to R2 videos/ prefix)")
     args = parser.parse_args()
 
@@ -132,15 +174,17 @@ def main() -> None:
         print(f"[ERROR] Missing environment variables: {', '.join(missing)}", file=sys.stderr)
         sys.exit(1)
 
-    fps = args.fps or cfg["generate"]["default_fps"]
+    fps = args.fps if args.fps is not None else positive_fps(str(cfg["generate"]["default_fps"]))
     scale = cfg["generate"]["video_scale"]
     prefix = cfg["storage"]["r2_prefix"]
     videos_prefix = cfg["storage"]["videos_prefix"]
     bucket = os.environ["R2_BUCKET_NAME"]
 
     today = date.today()
-    date_to = date.fromisoformat(args.date_to) if args.date_to else today
-    date_from = date.fromisoformat(args.date_from) if args.date_from else date(today.year, today.month, 1)
+    date_to = args.date_to or today
+    date_from = args.date_from or date(today.year, today.month, 1)
+    if date_from > date_to:
+        parser.error("--date-from must be on or before --date-to")
 
     output_name = args.output or f"timelapse_{date_from.isoformat()}_to_{date_to.isoformat()}.mp4"
     r2_video_key = f"{videos_prefix}/{output_name}"
@@ -158,7 +202,7 @@ def main() -> None:
     print(f"[INFO] Found {len(keys)} frames.")
 
     # Write final MP4 to CWD so GitHub Actions artifact upload can find it.
-    video_path = os.path.join(os.getcwd(), output_name)
+    video_path = str(Path.cwd() / output_name)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         download_frames(client, bucket, keys, tmpdir)
@@ -166,6 +210,7 @@ def main() -> None:
         build_timelapse(tmpdir, video_path, fps, scale)
 
     upload_video(client, bucket, video_path, r2_video_key)
+    publish_github_output(video_path)
     print(f"[INFO] Local file kept at: {video_path}")
 
 
