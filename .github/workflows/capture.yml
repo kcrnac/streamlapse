@@ -35,6 +35,15 @@ jobs:
           cache: 'pip'
           cache-dependency-path: requirements.txt
 
+      - name: Cache verified FFmpeg
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .cache/ffmpeg
+          key: ffmpeg-linux-x64-n8.1.2-47-g156bb4d299-90f0f2d8326a
+
+      - name: Set up verified FFmpeg
+        run: bash .github/scripts/setup-ffmpeg-linux.sh
+
       - name: Install dependencies
         run: pip install --require-hashes -r requirements.txt
 

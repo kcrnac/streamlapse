@@ -274,8 +274,15 @@ pnpm test
 ```
 
 `requirements.in` lists direct Python dependencies; `requirements.txt` is the
-hash-locked transitive install file generated from it. Dependabot checks Python,
-Worker, and GitHub Actions dependencies monthly.
+hash-locked transitive install file generated from it. Dependency updates are
+reviewed and applied manually; this repository does not run an automated
+dependency-update bot.
+
+The capture workflow caches a SHA-256-verified, immutable Linux FFmpeg build.
+This is intentional: the smaller Linux executable bundled by
+`imageio-ffmpeg==0.6.0` can crash while demuxing some HLS/MPEG-TS streams. On
+Linux, run `.github/scripts/setup-ffmpeg-linux.sh` once before a local capture.
+Windows local runs continue to use the verified bundled executable.
 
 ---
 

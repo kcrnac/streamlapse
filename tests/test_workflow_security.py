@@ -34,13 +34,25 @@ class WorkflowSecurityTests(unittest.TestCase):
                         with self.subTest(workflow=workflow_path.name, action=step["uses"]):
                             self.assertRegex(step["uses"], SHA_PIN)
 
-    def test_workflows_do_not_download_mutable_ffmpeg_builds(self):
+    def test_workflows_use_an_immutable_verified_ffmpeg_build(self):
         workflow_source = "\n".join(
             path.read_text(encoding="utf-8") for path in WORKFLOW_DIR.glob("*.yml")
         )
+        setup_source = (
+            REPO_ROOT / ".github" / "scripts" / "setup-ffmpeg-linux.sh"
+        ).read_text(encoding="utf-8")
 
-        self.assertNotIn("FFmpeg-Builds", workflow_source)
-        self.assertNotIn("releases/download/latest", workflow_source)
+        self.assertNotIn("releases/download/latest", setup_source)
+        self.assertIn("autobuild-2026-08-27-16-45", setup_source)
+        self.assertIn(
+            'archive_sha256="5422737149e93e157bd736b699be798e1f6d9ecbd97751a761e2518593004a89"',
+            setup_source,
+        )
+        self.assertIn(
+            'binary_sha256="90f0f2d8326a62da86a94548a1bfa255140934512af8c32d39a07499da0ea4c3"',
+            setup_source,
+        )
+        self.assertIn("setup-ffmpeg-linux.sh", workflow_source)
         self.assertIn("pip install --require-hashes", workflow_source)
 
 

@@ -24,9 +24,9 @@ import boto3
 import yaml
 
 try:
-    from .ffmpeg_binary import verified_ffmpeg_exe
+    from .ffmpeg_binary import verified_stream_ffmpeg_exe
 except ImportError:  # Support direct execution: python scripts/capture.py
-    from ffmpeg_binary import verified_ffmpeg_exe
+    from ffmpeg_binary import verified_stream_ffmpeg_exe
 
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yml"
@@ -61,8 +61,9 @@ def is_work_time(cfg: dict) -> bool:
 
 
 def capture_frame(stream_url: str, output_path: str, quality: int, timeout: int) -> None:
+    executable = verified_stream_ffmpeg_exe()
     cmd = [
-        verified_ffmpeg_exe(),
+        executable,
         "-y",
         "-loglevel", "error",
         "-timeout", str(timeout * 1_000_000),  # ffmpeg uses microseconds for timeout
@@ -71,9 +72,26 @@ def capture_frame(stream_url: str, output_path: str, quality: int, timeout: int)
         "-q:v", str(quality),
         output_path,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
+    except subprocess.TimeoutExpired:
+        print(
+            f"[ERROR] ffmpeg timed out after {timeout + 10} seconds "
+            f"(executable: {executable})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     if result.returncode != 0:
-        print(f"[ERROR] ffmpeg failed:\n{result.stderr}", file=sys.stderr)
+        if result.returncode < 0:
+            status = f"terminated by signal {-result.returncode}"
+        else:
+            status = f"exited with code {result.returncode}"
+        stderr = result.stderr.strip() or "(no stderr output)"
+        print(
+            f"[ERROR] ffmpeg {status} (executable: {executable}):\n{stderr}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
