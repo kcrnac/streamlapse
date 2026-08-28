@@ -38,10 +38,10 @@ Cloudflare R2  videos/timelapse_<from>_to_<to>.mp4
 
 [`cloudflare/scheduler/wrangler.jsonc`](cloudflare/scheduler/wrangler.jsonc) is
 the single source of truth for automatic scheduling. Its Cron Trigger runs every
-15 minutes from Monday through Saturday, and its variables define the
-`Europe/Zagreb` 06:30–18:00 window. The Worker does not download repository
-configuration. [`config.yml`](config.yml) contains only capture, storage, and
-video settings.
+15 minutes from 04:00 through 17:45 UTC, Monday through Saturday, and its
+variables define the `Europe/Zagreb` 06:30–18:00 window. The Worker does not
+download repository configuration. [`config.yml`](config.yml) contains only
+capture, storage, and video settings.
 
 ---
 
@@ -111,15 +111,15 @@ The Cron expression restricts invocations to Monday through Saturday and every
   "SCHEDULE_END": "18:00"
 },
 "triggers": {
-  "crons": ["*/15 * * * MON-SAT"]
+  "crons": ["*/15 4-17 * * MON-SAT"]
 }
 ```
 
-Cloudflare Cron Triggers use UTC. The weekday and 15-minute cadence can live in
-the Cron expression, but a fixed Zagreb-local window cannot because Zagreb
-switches between CET and CEST. The Worker therefore performs only the small
-local-time check before dispatching GitHub. This preserves 06:30–18:00 through
-daylight-saving changes without fetching configuration from GitHub.
+Cloudflare Cron Triggers use UTC. The Cron expression limits invocations to the
+UTC hours that cover the Zagreb window in both CET and CEST, while the Worker
+performs the exact local-time boundary check before dispatching GitHub. This
+preserves 06:30–18:00 through daylight-saving changes, avoids overnight Worker
+invocations, and does not fetch configuration from GitHub.
 
 ### 6. Deploy the Cloudflare scheduler
 
@@ -167,11 +167,12 @@ deployment credential and is separate from the Worker's `GITHUB_TOKEN` runtime
 secret. No R2 permission is needed to deploy this scheduler. Existing Worker
 secrets that are not supplied by the deployment are preserved.
 
-Cloudflare invokes the Worker at `00`, `15`, `30`, and `45` past every hour from
-Monday through Saturday. The Worker checks the Wrangler schedule variables and
-calls the Capture Frame workflow only inside the configured local window. It is
-not invoked on Sunday. The GitHub workflow intentionally has no `schedule`
-trigger; `workflow_dispatch` is its only entry point.
+Cloudflare invokes the Worker at `00`, `15`, `30`, and `45` past each hour from
+04:00 through 17:45 UTC, Monday through Saturday. The Worker checks the Wrangler
+schedule variables and calls the Capture Frame workflow only inside the
+configured local window. It is not invoked on Sunday. The GitHub workflow
+intentionally has no `schedule` trigger; `workflow_dispatch` is its only entry
+point.
 
 The separate Keepalive workflow remains scheduled twice monthly as a repository
 activity safeguard. It does not trigger captures or affect the Cloudflare
