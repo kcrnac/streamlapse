@@ -7,7 +7,7 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "wrangler types && tsc --noEmit",
     "types": "wrangler types"
   },
   "devDependencies": {

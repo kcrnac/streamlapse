@@ -1,6 +1,7 @@
 .codex/
 .cache/ffmpeg/
 .venv/
+cloudflare/scheduler/worker-configuration.d.ts
 __pycache__/
 *.py[cod]
 cloudflare/scheduler/node_modules/

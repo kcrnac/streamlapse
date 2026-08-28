@@ -57,9 +57,6 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Check generated Worker types
-        run: pnpm wrangler types --check
-
   deploy:
     name: Deploy Worker
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

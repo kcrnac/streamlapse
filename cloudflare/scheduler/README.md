@@ -30,7 +30,6 @@ manual workflow run always captures and may override that timezone input.
 
 ```sh
 pnpm install
-pnpm types
 pnpm typecheck
 pnpm test
 ```
