@@ -48,10 +48,12 @@ def is_work_time(cfg: dict) -> bool:
 
     start_h, start_m = map(int, cfg["schedule"]["work_hours"]["start"].split(":"))
     end_h, end_m = map(int, cfg["schedule"]["work_hours"]["end"].split(":"))
-    start = now.replace(hour=start_h, minute=start_m, second=0, microsecond=0)
-    end = now.replace(hour=end_h, minute=end_m, second=0, microsecond=0)
+    minute_of_day = now.hour * 60 + now.minute
+    start = start_h * 60 + start_m
+    end = end_h * 60 + end_m
+    interval = cfg["schedule"]["interval_minutes"]
 
-    return start <= now <= end
+    return start <= minute_of_day <= end and (minute_of_day - start) % interval == 0
 
 
 def capture_frame(stream_url: str, output_path: str, quality: int, timeout: int) -> None:
@@ -90,7 +92,8 @@ def upload_to_r2(local_path: str, bucket: str, key: str,
         key,
         ExtraArgs={"ContentType": "image/jpeg"},
     )
-    print(f"[OK] Uploaded → {key}")
+    size_bytes = os.path.getsize(local_path)
+    print(f"[OK] Uploaded → {key} ({size_bytes} bytes)")
 
 
 def main() -> None:
