@@ -1,12 +1,8 @@
 name: Capture Frame
 
 on:
-  schedule:
-    # Triggers every 15 minutes, offset from the top of the hour to reduce
-    # high-load scheduling delays. Capture interval, work days, and work hours
-    # are all configured in config.yml — capture.py skips out-of-window runs.
-    - cron: '7,22,37,52 * * * *'
-  # Allow manual trigger for testing
+  # Cloudflare Cron Triggers dispatch this workflow. Keep workflow_dispatch so
+  # the Worker, API clients, and manual tests can all invoke the same workflow.
   workflow_dispatch:
     inputs:
       force:

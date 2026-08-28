@@ -1,13 +1,16 @@
 # Streamlapse Cloudflare scheduler
 
 This Worker is the external scheduler for `.github/workflows/capture.yml`.
-Cloudflare evaluates the scheduled instant in `Europe/Zagreb` and dispatches the
-workflow every 15 minutes, Monday through Saturday, from 06:00 through 18:00
-inclusive.
+Cloudflare invokes it every 15 minutes (`00`, `15`, `30`, and `45` past each
+hour), Monday through Saturday. It is not invoked on Sunday. On every
+invocation, the Worker reads the `schedule` section of the root `config.yml`
+from `main`, evaluates the scheduled instant in the configured timezone, and
+dispatches the capture workflow only when the configured day and time window
+are eligible.
 
-The dispatch sends `force=true`. This is intentional: Cloudflare owns the new
-schedule while the existing `capture.py` and `config.yml` behavior remains
-unchanged.
+The dispatch sends `force=true` because Cloudflare has already evaluated the
+shared configuration. Manual workflow runs can leave `force=false` to apply the
+same day and work-hours checks inside `capture.py`.
 
 ## Local validation
 
@@ -29,7 +32,5 @@ pnpm wrangler secret put GITHUB_TOKEN
 pnpm deploy
 ```
 
-The existing GitHub Actions cron should remain enabled until a Cloudflare Cron
-event has successfully dispatched the workflow and produced a new R2 image.
-After that proof, remove only the `schedule` block from `capture.yml` and retain
-`workflow_dispatch`.
+GitHub Actions does not have its own capture cron. Keep `workflow_dispatch` in
+`capture.yml`: it is the API entry point used by this Worker and by manual runs.

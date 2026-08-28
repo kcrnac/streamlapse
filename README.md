@@ -2,17 +2,17 @@
 
 **streamlapse** automatically captures a JPEG frame from any public HLS stream every 15 minutes (during configurable work hours), stores the frames in Cloudflare R2, and lets you assemble any date range into an MP4 timelapse on demand — all for free, with zero infrastructure to manage.
 
-Everything runs on **GitHub Actions** (free on public repos) and **Cloudflare R2** (10 GB free tier, zero egress fees). No servers, no cron jobs, no cloud bills.
+Scheduling runs on a **Cloudflare Worker Cron Trigger**, capture and video jobs run on **GitHub Actions** (free on public repos), and media is stored in **Cloudflare R2** (10 GB free tier, zero egress fees). There are no servers to manage.
 
 ---
 
 ## How it works
 
 ```
-HLS stream
+Cloudflare Worker  ── every 5 min heartbeat ──► reads schedule from config.yml
     │
-    ▼  every 15 min (GitHub Actions cron)
-capture.py ──► ffmpeg grabs 1 JPEG frame
+    ▼  eligible times only (workflow_dispatch)
+GitHub Actions ──► capture.py ──► ffmpeg grabs 1 JPEG frame from the HLS stream
     │
     ▼
 Cloudflare R2  screenshots/YYYY-MM-DD/HH-MM-SS.jpg
@@ -25,14 +25,18 @@ Cloudflare R2  videos/timelapse_<from>_to_<to>.mp4
     +  GitHub Actions artifact (direct download)
 ```
 
-| Component                 | Role                                                              |
-| ------------------------- | ----------------------------------------------------------------- |
-| **GitHub Actions**        | Free cron scheduler — runs `capture.py` every 15 minutes          |
-| **Cloudflare R2**         | S3-compatible object storage — 10 GB free, zero egress fees       |
-| **`scripts/capture.py`**  | Checks work hours → grabs JPEG frame via `ffmpeg` → uploads to R2 |
-| **`scripts/generate.py`** | Downloads frames from R2 → assembles MP4 → uploads back to R2     |
+| Component                            | Role                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| **Cloudflare Worker Cron Trigger**   | Reads `config.yml` and dispatches eligible captures                   |
+| **GitHub Actions**                   | Runs capture and on-demand timelapse jobs                             |
+| **Cloudflare R2**                    | S3-compatible object storage — 10 GB free, zero egress fees           |
+| **`scripts/capture.py`**             | Validates non-forced runs, grabs one JPEG with `ffmpeg`, uploads to R2 |
+| **`scripts/generate.py`**            | Downloads frames from R2, assembles an MP4, uploads it back to R2      |
 
-Capture schedule: configurable in `config.yml` (default: Mon–Sat 07:00–17:00, every 15 minutes).
+`config.yml` is the single source of truth for the capture timezone, work days,
+and active window. Cloudflare is the only automatic scheduler and invokes the
+Worker every 15 minutes. The current schedule is Monday through Saturday from
+06:30 through 18:00 in `Europe/Zagreb`; Sunday is disabled.
 
 ---
 
@@ -97,16 +101,37 @@ schedule:
   timezone: 'Europe/Zagreb' # any IANA timezone
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
-    start: '07:00'
-    end: '17:00'
+    start: '06:30'
+    end: '18:00'
 ```
 
-Frames are captured only within these windows, so your R2 storage grows only when the stream is relevant.
+The Cloudflare Worker reads this file directly from `main` before every
+scheduling decision, so the timezone, days, and work hours are not duplicated
+in Worker code. The 15-minute cadence is defined once by the Cloudflare Cron
+Trigger in `cloudflare/scheduler/wrangler.jsonc`.
 
-### 6. Push and verify
+### 6. Deploy the Cloudflare scheduler
 
-After pushing your changes, go to **Actions → Capture Frame → Run workflow** and click **Run workflow**.  
-If it's outside configured work hours the run exits with `[SKIP]` — that is expected. Pass `force: true` in the dispatch inputs to bypass the check.
+Create a fine-grained GitHub personal access token restricted to this repository with **Actions: Read and write** permission. Then deploy the Worker and enter the token when prompted:
+
+```bash
+cd cloudflare/scheduler
+corepack enable
+pnpm install
+pnpm wrangler login
+pnpm wrangler secret put GITHUB_TOKEN
+pnpm deploy
+```
+
+Cloudflare invokes the Worker at `00`, `15`, `30`, and `45` past every hour from
+Monday through Saturday. The Worker reads the current schedule from `config.yml`
+and calls the Capture Frame workflow only inside the configured window. It does
+not run on Sunday. The GitHub workflow intentionally has no `schedule` trigger;
+`workflow_dispatch` is its only entry point.
+
+### 7. Push and verify
+
+After pushing your changes, go to **Actions → Capture Frame → Run workflow** and click **Run workflow**. If it is outside the configured schedule, a normal manual run exits with `[SKIP]`. Pass `force: true` to bypass the schedule for testing. Automatic Cloudflare dispatches use `force: true` only after the Worker has evaluated `config.yml`.
 
 ---
 
@@ -157,11 +182,10 @@ schedule:
   timezone: 'Europe/Zagreb' # IANA timezone string
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
-    start: '07:00'
-    end: '17:00'
+    start: '06:30'
+    end: '18:00'
 
 capture:
-  interval_minutes: 15 # how often to capture (5, 10, 15, 30, or 60)
   jpeg_quality: 3 # ffmpeg -q:v: 1 (best) – 31 (worst); 2–4 is a good range
   ffmpeg_timeout: 30 # seconds to wait for the stream before giving up
 
@@ -195,6 +219,12 @@ python scripts/capture.py --force
 
 # Generate timelapse for a date range
 python scripts/generate.py --date-from 2026-04-01 --date-to 2026-04-07 --fps 12
+
+# Validate the Cloudflare scheduler
+cd cloudflare/scheduler
+pnpm install
+pnpm typecheck
+pnpm test
 ```
 
 ---
