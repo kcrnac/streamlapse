@@ -36,7 +36,7 @@ Cloudflare R2  videos/timelapse_<from>_to_<to>.mp4
 `config.yml` is the single source of truth for the capture timezone, work days,
 and active window. Cloudflare is the only automatic scheduler and invokes the
 Worker every 15 minutes. The current schedule is Monday through Saturday from
-06:00 through 18:00 in `Europe/Zagreb`; Sunday is disabled.
+06:30 through 18:00 in `Europe/Zagreb`; Sunday is disabled.
 
 ---
 
@@ -101,7 +101,7 @@ schedule:
   timezone: 'Europe/Zagreb' # any IANA timezone
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
-    start: '06:00'
+    start: '06:30'
     end: '18:00'
 ```
 
@@ -182,7 +182,7 @@ schedule:
   timezone: 'Europe/Zagreb' # IANA timezone string
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
-    start: '06:00'
+    start: '06:30'
     end: '18:00'
 
 capture:
