@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>streamlapse — HLS stream timelapse, for free</title>
+    <title>streamlapse — HLS stream timelapse</title>
     <style>
       *,
       *::before,
@@ -628,12 +628,13 @@
     <div class="hero">
       <div class="hero__inner">
         <div>
-          <div class="hero__eyebrow">Open source &middot; Free to run</div>
+          <div class="hero__eyebrow">Open source &middot; Built on generous free tiers</div>
           <h1>Automatic timelapse<br />from any HLS stream</h1>
           <p class="hero__desc">
             Capture frames from any public HLS stream on a configurable
             schedule, store them in Cloudflare R2, and assemble them into an MP4
-            timelapse on demand — no servers, no cron jobs, no cloud bills.
+            timelapse on demand — no servers to manage. Modest usage fits within
+            the included GitHub Actions and Cloudflare R2 allowances.
           </p>
           <div class="hero__actions">
             <a
@@ -657,14 +658,14 @@
           <div class="pipe-step">
             <div class="p-icon">⚙️</div>
             <div class="p-text">
-              <strong>GitHub Actions cron</strong>Fires every 15 min — no server
-              needed
+              <strong>Cloudflare Worker cron</strong>Evaluates the schedule every
+              15 minutes, Monday–Saturday
             </div>
           </div>
           <div class="pipe-step">
             <div class="p-icon">📷</div>
             <div class="p-text">
-              <strong>capture.py</strong>Schedule check → ffmpeg → JPEG upload
+              <strong>GitHub Actions + capture.py</strong>ffmpeg → JPEG upload
             </div>
           </div>
           <div class="pipe-step">
@@ -698,7 +699,8 @@
               <li><a href="#r2-token">3. Create API token</a></li>
               <li><a href="#secrets">4. Add secrets</a></li>
               <li><a href="#schedule">5. Configure schedule</a></li>
-              <li><a href="#verify">6. Verify</a></li>
+              <li><a href="#deploy">6. Deploy scheduler</a></li>
+              <li><a href="#verify">7. Verify</a></li>
             </ul>
           </li>
           <li><a href="#timelapse">Generating a timelapse</a></li>
@@ -712,17 +714,15 @@
         <section class="section" id="how-it-works">
           <h2>How it works</h2>
           <p>
-            streamlapse is a zero-infrastructure pipeline built on two free
-            tiers.
-            <strong>GitHub Actions</strong> runs <code>capture.py</code> on a
-            5-minute cron. The script checks whether the current time falls
-            inside your configured work hours and capture interval — if not, it
-            exits with <code>[SKIP]</code>. If yes,
-            <strong>ffmpeg</strong> pulls a single JPEG frame from your HLS
-            stream and uploads it to <strong>Cloudflare R2</strong>. When you
-            want a timelapse, you manually trigger <code>generate.py</code> — it
-            downloads every frame for a date range, stitches them into an MP4,
-            and uploads the result back to R2.
+            streamlapse is a serverless pipeline built on GitHub and Cloudflare.
+            A <strong>Cloudflare Worker Cron Trigger</strong> runs at 00, 15, 30,
+            and 45 minutes past each hour from Monday through Saturday. It reads
+            <code>config.yml</code> from the configured repository and dispatches
+            the GitHub Actions capture workflow only during eligible local times.
+            <strong>ffmpeg</strong> then pulls one JPEG frame from the HLS stream
+            and uploads it to <strong>Cloudflare R2</strong>. Timelapse generation
+            is a separate on-demand workflow that downloads a selected date
+            range, creates an MP4, and uploads the result to R2.
           </p>
 
           <div class="feature-grid">
@@ -730,24 +730,24 @@
               <div class="fc-icon">📅</div>
               <h4>Configurable schedule</h4>
               <p>
-                Set days, hours, timezone, and capture interval — all in one
-                YAML file.
+                Set days, hours, and timezone in <code>config.yml</code>; the
+                fixed 15-minute cadence lives in the Worker configuration.
               </p>
             </div>
             <div class="feature-card">
               <div class="fc-icon">☁️</div>
               <h4>Free storage</h4>
               <p>
-                Cloudflare R2 gives 10 GB free with zero egress fees. No
-                surprise bills.
+                Cloudflare R2 includes 10 GB-month of storage and free Internet
+                egress. Storage and operations above the allowance are billed.
               </p>
             </div>
             <div class="feature-card">
               <div class="fc-icon">⚙️</div>
               <h4>No servers</h4>
               <p>
-                Everything runs on GitHub Actions. Public repos get unlimited
-                free minutes.
+                Scheduling runs on Cloudflare and media processing runs on
+                standard GitHub-hosted runners, which are free for public repos.
               </p>
             </div>
             <div class="feature-card">
@@ -770,13 +770,17 @@
               </thead>
               <tbody>
                 <tr>
+                  <td><strong>Cloudflare Worker</strong></td>
+                  <td>Evaluates the schedule every 15 minutes and dispatches capture</td>
+                </tr>
+                <tr>
                   <td><strong>GitHub Actions</strong></td>
-                  <td>Free cron scheduler — triggers every 15 min</td>
+                  <td>Runs capture and on-demand timelapse processing</td>
                 </tr>
                 <tr>
                   <td><strong>Cloudflare R2</strong></td>
                   <td>
-                    S3-compatible object storage — 10 GB free, zero egress
+                    S3-compatible object storage with a free allowance and free egress
                   </td>
                 </tr>
                 <tr>
@@ -807,8 +811,9 @@
 
           <h3 id="fork">1. Fork the repo and make it public</h3>
           <p>
-            GitHub Actions on <strong>public repos</strong> have unlimited free
-            minutes.
+            Standard GitHub-hosted runners are free for
+            <strong>public repositories</strong>, subject to GitHub's current
+            Actions usage policy.
           </p>
           <ol class="steps">
             <li>
@@ -982,10 +987,10 @@
           <h3 id="schedule">5. Configure the schedule</h3>
           <p>
             Edit <code>config.yml</code> to match your timezone, active days,
-            hours, and capture frequency. The GitHub Actions cron always fires
-            every 15 minutes — all schedule logic runs
-            inside <code>capture.py</code>, so you only ever edit
-            <code>config.yml</code>.
+            and hours. The Worker reads it before every decision. Its Cron
+            Trigger supplies the fixed 15-minute cadence and an outer
+            Monday-through-Saturday guard, so keep that guard aligned if you
+            intentionally enable Sunday.
           </p>
           <div class="code-block">
             <div class="code-block__header">config.yml</div>
@@ -993,14 +998,40 @@
   timezone: 'Europe/Zagreb'          # any IANA timezone
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
-    start: '07:00'
-    end: '17:00'
+    start: '06:30'
+    end: '18:00'
 
 capture:
-  interval_minutes: 15   # 5, 10, 15, 30, or 60</code></pre>
+  jpeg_quality: 3
+  ffmpeg_timeout: 30</code></pre>
           </div>
 
-          <h3 id="verify">6. Push and verify</h3>
+          <h3 id="deploy">6. Deploy the Cloudflare scheduler</h3>
+          <p>
+            In <code>cloudflare/scheduler/wrangler.jsonc</code>, set
+            <code>GITHUB_OWNER</code>, <code>GITHUB_REPO</code>, and
+            <code>GITHUB_REF</code> to your fork. Create a fine-grained GitHub
+            token restricted to that repository with
+            <strong>Actions: Read and write</strong>, then store it as the
+            Worker's <code>GITHUB_TOKEN</code> secret and deploy:
+          </p>
+          <div class="code-block">
+            <div class="code-block__header">Terminal</div>
+            <pre><code>cd cloudflare/scheduler
+corepack enable
+pnpm install
+pnpm wrangler login
+pnpm wrangler secret put GITHUB_TOKEN
+pnpm deploy</code></pre>
+          </div>
+          <p>
+            For automatic future deployments, create a GitHub environment named
+            <code>production</code>, restrict it to <code>main</code>, and add the
+            <code>CLOUDFLARE_API_TOKEN</code> environment secret plus the
+            <code>CLOUDFLARE_ACCOUNT_ID</code> environment variable.
+          </p>
+
+          <h3 id="verify">7. Push and verify</h3>
           <p>
             After pushing go to
             <strong>Actions → Capture Frame → Run workflow</strong>. Outside
@@ -1052,13 +1083,20 @@ capture:
               </tbody>
             </table>
           </div>
+          <p>
+            Dates must use exact <code>YYYY-MM-DD</code> form and the start date
+            cannot be after the end date. FPS must be a positive integer. A
+            supplied output must be a simple <code>.mp4</code> basename using
+            only letters, numbers, dots, dashes, or underscores.
+          </p>
         </section>
 
         <section class="section" id="config">
           <h2>Configuration reference</h2>
           <p>
-            All tuneable settings live in <code>config.yml</code> at the root of
-            the repo.
+            Capture and media settings live in <code>config.yml</code> at the
+            repository root. Worker cadence and repository targeting live in
+            <code>cloudflare/scheduler/wrangler.jsonc</code>.
           </p>
           <div class="code-block">
             <div class="code-block__header">config.yml — full reference</div>
@@ -1066,12 +1104,10 @@ capture:
   timezone: 'Europe/Zagreb'          # IANA timezone for work_days/work_hours checks
   work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
-    start: '07:00'
-    end: '17:00'
+    start: '06:30'
+    end: '18:00'
 
 capture:
-  interval_minutes: 15   # capture frequency (5, 10, 15, 30, or 60)
-                         # cron fires every 15 min; this check runs in capture.py
   jpeg_quality: 3       # ffmpeg -q:v: 1 (best) – 31 (worst); 2–4 is a good range
   ffmpeg_timeout: 30    # seconds before giving up on the stream
 
@@ -1105,15 +1141,8 @@ generate:
                 </tr>
                 <tr>
                   <td><code>schedule.work_hours</code></td>
-                  <td>07:00–17:00</td>
+                  <td>06:30–18:00</td>
                   <td>Time window in the configured timezone</td>
-                </tr>
-                <tr>
-                  <td><code>capture.interval_minutes</code></td>
-                  <td><code>5</code></td>
-                  <td>
-                    How often a frame is captured — multiple of 5, up to 60
-                  </td>
                 </tr>
                 <tr>
                   <td><code>capture.jpeg_quality</code></td>
@@ -1152,7 +1181,7 @@ generate:
             <div class="code-block__header">bash</div>
             <pre><code>python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install --require-hashes -r requirements.txt
 
 # Set required environment variables
 export STREAM_URL=https://example.com/stream.m3u8
@@ -1161,7 +1190,7 @@ export R2_SECRET_ACCESS_KEY=your_secret_access_key
 export R2_BUCKET_NAME=my-streamlapse
 export R2_ENDPOINT=https://&lt;account_id&gt;.eu.r2.cloudflarestorage.com
 
-# Test capture (--force bypasses work-hours and interval checks)
+# Test capture (--force bypasses work-day and work-hour checks)
 python scripts/capture.py --force
 
 # Generate timelapse for a date range

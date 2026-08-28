@@ -1,8 +1,8 @@
 # streamlapse
 
-**streamlapse** automatically captures a JPEG frame from any public HLS stream every 15 minutes (during configurable work hours), stores the frames in Cloudflare R2, and lets you assemble any date range into an MP4 timelapse on demand — all for free, with zero infrastructure to manage.
+**streamlapse** automatically captures a JPEG frame from any public HLS stream every 15 minutes (during configurable work hours), stores the frames in Cloudflare R2, and lets you assemble a date range into an MP4 timelapse on demand — with no servers to manage and free tiers that cover modest usage.
 
-Scheduling runs on a **Cloudflare Worker Cron Trigger**, capture and video jobs run on **GitHub Actions** (free on public repos), and media is stored in **Cloudflare R2** (10 GB free tier, zero egress fees). There are no servers to manage.
+Scheduling runs on a **Cloudflare Worker Cron Trigger**, capture and video jobs run on **GitHub Actions**, and media is stored in **Cloudflare R2**. Public repositories can use standard GitHub-hosted runners without minute charges, and R2 includes a free allowance plus free Internet egress; usage above the applicable allowances can still be billed.
 
 ---
 
@@ -29,14 +29,17 @@ Cloudflare R2  videos/timelapse_<from>_to_<to>.mp4
 | ------------------------------------ | --------------------------------------------------------------------- |
 | **Cloudflare Worker Cron Trigger**   | Reads `config.yml` and dispatches eligible captures                   |
 | **GitHub Actions**                   | Runs capture and on-demand timelapse jobs                             |
-| **Cloudflare R2**                    | S3-compatible object storage — 10 GB free, zero egress fees           |
+| **Cloudflare R2**                    | S3-compatible object storage with a free allowance and free egress     |
 | **`scripts/capture.py`**             | Validates non-forced runs, grabs one JPEG with `ffmpeg`, uploads to R2 |
 | **`scripts/generate.py`**            | Downloads frames from R2, assembles an MP4, uploads it back to R2      |
 
-`config.yml` is the single source of truth for the capture timezone, work days,
-and active window. Cloudflare is the only automatic scheduler and invokes the
-Worker every 15 minutes. The current schedule is Monday through Saturday from
-06:30 through 18:00 in `Europe/Zagreb`; Sunday is disabled.
+`config.yml` is the runtime source of truth for the capture timezone, work days,
+and active window. Cloudflare is the only automatic scheduler. Its Cron Trigger
+defines the fixed 15-minute cadence and an outer Monday-through-Saturday guard;
+the Worker then applies `config.yml`. The effective schedule is therefore the
+intersection of both controls. The current settings capture Monday through
+Saturday from 06:30 through 18:00 in `Europe/Zagreb`; neither the Worker nor the
+capture workflow runs automatically on Sunday.
 
 ---
 
@@ -44,7 +47,8 @@ Worker every 15 minutes. The current schedule is Monday through Saturday from
 
 ### 1. Fork this repo and make it public
 
-GitHub Actions on **public repos** have unlimited free minutes. The simplest path:
+Standard GitHub-hosted runners are free for **public repositories**, subject to
+GitHub's current Actions usage policy. The simplest path:
 
 1. Click **Fork** on this repo
 2. In the fork, go to **Settings → General** and make sure visibility is **Public**
@@ -105,16 +109,30 @@ schedule:
     end: '18:00'
 ```
 
-The Cloudflare Worker reads this file directly from `main` before every
-scheduling decision, so the timezone, days, and work hours are not duplicated
-in Worker code. The 15-minute cadence is defined once by the Cloudflare Cron
-Trigger in `cloudflare/scheduler/wrangler.jsonc`.
+The Cloudflare Worker reads this file directly from the configured GitHub ref
+before every scheduling decision. The timezone and work-hour window are not
+duplicated in Worker code. The 15-minute cadence and the outer Monday-through-
+Saturday invocation guard live in `cloudflare/scheduler/wrangler.jsonc`; keep
+that guard aligned if you intentionally change `schedule.work_days` to include
+Sunday.
 
 ### 6. Deploy the Cloudflare scheduler
 
-The Worker needs a fine-grained GitHub personal access token restricted to this
-repository with **Actions: Read and write** permission. Store this runtime token
-once in Cloudflare, then perform the first deployment:
+First update the non-secret repository target in
+`cloudflare/scheduler/wrangler.jsonc`. Forks must replace the defaults with their
+own owner and repository:
+
+```jsonc
+"vars": {
+  "GITHUB_OWNER": "your-github-user",
+  "GITHUB_REPO": "streamlapse",
+  "GITHUB_REF": "main"
+}
+```
+
+The Worker also needs a fine-grained GitHub personal access token restricted to
+that repository with **Actions: Read and write** permission. Store this runtime
+token once in Cloudflare, then perform the first deployment:
 
 ```bash
 cd cloudflare/scheduler
@@ -126,8 +144,10 @@ pnpm deploy
 ```
 
 Future Worker changes are validated in pull requests and deployed automatically
-after they reach `main` by the **Deploy Cloudflare Scheduler** workflow. Create a
-GitHub environment named `production` under **Settings → Environments** and add:
+after they reach `main` by the **Deploy Cloudflare Scheduler** workflow. Manual
+deployments are also restricted to `main`. Create a GitHub environment named
+`production` under **Settings → Environments**, restrict its deployment branch
+to `main` (and add a required reviewer if desired), then add:
 
 | Type                 | Name                    | Value                                                                    |
 | -------------------- | ----------------------- | ------------------------------------------------------------------------ |
@@ -169,6 +189,10 @@ After pushing your changes, go to **Actions → Capture Frame → Run workflow**
 | `fps`       | `24`                           | Output video frame rate            |
 | `output`    | auto-generated from date range | Output filename (e.g. `april.mp4`) |
 
+Dates must use exact `YYYY-MM-DD` form and the start cannot be after the end.
+FPS must be a positive integer. A supplied output must be a simple `.mp4`
+basename containing only letters, numbers, dots, dashes, or underscores.
+
 3. When the run finishes, the MP4 is available as a downloadable **artifact** in the run summary, and also uploaded to R2 at `videos/`
 
 ### Via the GitHub REST API
@@ -195,7 +219,9 @@ Generate a PAT at **GitHub → Settings → Developer settings → Personal acce
 
 ## Configuration reference
 
-All tuneable settings live in [`config.yml`](config.yml):
+Capture and media settings live in [`config.yml`](config.yml). The fixed cron
+cadence and GitHub repository target live in
+[`cloudflare/scheduler/wrangler.jsonc`](cloudflare/scheduler/wrangler.jsonc):
 
 ```yaml
 schedule:
@@ -225,7 +251,7 @@ generate:
 ```bash
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install --require-hashes -r requirements.txt
 
 # Set required environment variables
 export STREAM_URL=https://example.com/stream.m3u8
@@ -246,6 +272,10 @@ pnpm install
 pnpm typecheck
 pnpm test
 ```
+
+`requirements.in` lists direct Python dependencies; `requirements.txt` is the
+hash-locked transitive install file generated from it. Dependabot checks Python,
+Worker, and GitHub Actions dependencies monthly.
 
 ---
 
