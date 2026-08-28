@@ -4,7 +4,7 @@ stream:
 
 schedule:
   timezone: 'Europe/Zagreb'
-  work_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  work_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   work_hours:
     start: '06:00'
     end: '18:00'

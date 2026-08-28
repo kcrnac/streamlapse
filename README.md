@@ -35,8 +35,8 @@ Cloudflare R2  videos/timelapse_<from>_to_<to>.mp4
 
 `config.yml` is the single source of truth for the capture timezone, work days,
 and active window. Cloudflare is the only automatic scheduler and invokes the
-Worker every 15 minutes. The current schedule is every day from 06:00 through
-18:00 in `Europe/Zagreb`.
+Worker every 15 minutes. The current schedule is Monday through Saturday from
+06:00 through 18:00 in `Europe/Zagreb`; Sunday is disabled.
 
 ---
 
@@ -99,7 +99,7 @@ Edit [`config.yml`](config.yml) to match your stream's timezone and active hours
 ```yaml
 schedule:
   timezone: 'Europe/Zagreb' # any IANA timezone
-  work_days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
     start: '06:00'
     end: '18:00'
@@ -123,10 +123,11 @@ pnpm wrangler secret put GITHUB_TOKEN
 pnpm deploy
 ```
 
-Cloudflare invokes the Worker at `00`, `15`, `30`, and `45` past every hour. The
-Worker reads the current schedule from `config.yml` and calls the Capture Frame
-workflow only inside the configured window. The GitHub workflow intentionally
-has no `schedule` trigger; `workflow_dispatch` is its only entry point.
+Cloudflare invokes the Worker at `00`, `15`, `30`, and `45` past every hour from
+Monday through Saturday. The Worker reads the current schedule from `config.yml`
+and calls the Capture Frame workflow only inside the configured window. It does
+not run on Sunday. The GitHub workflow intentionally has no `schedule` trigger;
+`workflow_dispatch` is its only entry point.
 
 ### 7. Push and verify
 
@@ -179,7 +180,7 @@ All tuneable settings live in [`config.yml`](config.yml):
 ```yaml
 schedule:
   timezone: 'Europe/Zagreb' # IANA timezone string
-  work_days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
     start: '06:00'
     end: '18:00'

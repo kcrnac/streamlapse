@@ -11,7 +11,7 @@ import {
 const CONFIG_YAML = `
 schedule:
   timezone: Europe/Zagreb
-  work_days: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+  work_days: [Mon, Tue, Wed, Thu, Fri, Sat]
   work_hours:
     start: '06:00'
     end: '18:00'
@@ -26,7 +26,7 @@ function zagrebInstant(localIso: string, utcOffset: "+01:00" | "+02:00"): number
 function scheduledController(scheduledTime: number) {
   return {
     scheduledTime,
-    cron: "*/15 * * * *",
+    cron: "*/15 * * * MON-SAT",
     noRetry: vi.fn(),
   } satisfies ScheduledController;
 }
@@ -47,7 +47,7 @@ describe("schedule config", () => {
       startMinute: 360,
       endMinute: 1080,
     });
-    expect(SCHEDULE.workDays).toContain("Sun");
+    expect(SCHEDULE.workDays).not.toContain("Sun");
   });
 
   it("fails visibly when config.yml cannot be loaded", async () => {
@@ -67,7 +67,7 @@ describe("Europe/Zagreb schedule", () => {
     ["Monday 05:59", "2026-01-05T05:59:00", "+01:00", false, "outside-window"],
     ["Monday 06:00", "2026-01-05T06:00:00", "+01:00", true, "eligible"],
     ["Monday 06:15", "2026-01-05T06:15:00", "+01:00", true, "eligible"],
-    ["Sunday 12:00", "2026-01-11T12:00:00", "+01:00", true, "eligible"],
+    ["Sunday 12:00", "2026-01-11T12:00:00", "+01:00", false, "outside-work-days"],
     ["Monday 18:00", "2026-01-05T18:00:00", "+01:00", true, "eligible"],
     ["Monday 18:01", "2026-01-05T18:01:00", "+01:00", false, "outside-window"],
   ] as const)("handles %s", (_name, localIso, offset, expected, reason) => {
@@ -79,7 +79,7 @@ describe("Europe/Zagreb schedule", () => {
 
   it("honors excluded work days from config.yml", () => {
     const weekdaysOnly = parseScheduleConfig(
-      CONFIG_YAML.replace("Fri, Sat, Sun", "Fri"),
+      CONFIG_YAML.replace("Fri, Sat", "Fri"),
     );
 
     expect(
